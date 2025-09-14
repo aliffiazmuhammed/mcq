@@ -13,6 +13,10 @@ import MakerPage from "./pages/MakerPage";
 import CheckerPage from "./pages/CheckerPage";
 import "./App.css"
 import CreateQuestion from "./pages/maker/CreateQuestion";
+import DraftQuestions from "./pages/maker/DraftQuestions";
+import SubmittedQuestions from "./pages/maker/SubmittedQuestions";
+import CheckerReview from "./pages/checker/CheckerReview";
+import AcceptedQuestions from "./pages/checker/AcceptedQuestions";
 
 function PrivateRoute({ children, role }) {
   const { user, loading } = useAuth();
@@ -72,22 +76,18 @@ export default function App() {
             }
           >
             <Route index element={<h1>Maker Dashboard</h1>} />
-            <Route path="create" element={<CreateQuestion/>} />
-            <Route path="drafts" element={<h1>Draft Questions Page</h1>} />
-            <Route
-              path="submitted"
-              element={<h1>Submitted Questions Page</h1>}
-            />
+            <Route path="create" element={<CreateQuestion />} />
+            <Route path="drafts" element={<DraftQuestions />} />
+            <Route path="submitted" element={<SubmittedQuestions />} />
           </Route>
 
-          <Route
-            path="/checker"
-            element={
-              <PrivateRoute role="checker">
-                <CheckerPage />
-              </PrivateRoute>
-            }
-          />
+         
+            <Route path="/checker" element={<CheckerPage />}>
+              <Route path="dashboard" element={<h1>dash</h1>} />
+              <Route path="review" element={<CheckerReview/>} />
+              <Route path="accepted" element={<AcceptedQuestions/>} />
+            </Route>
+          
 
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/login" replace />} />
