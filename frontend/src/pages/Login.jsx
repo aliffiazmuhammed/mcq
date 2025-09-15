@@ -6,17 +6,20 @@ export default function Login() {
   const { login, user, loading } = useAuth();
   const navigate = useNavigate();
 
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  const handleLogin = (role) => {
-    if (!username || !password) {
-      alert("Please enter both username and password");
+  const handleLogin = async () => {
+    if (!email || !password) {
+      alert("Please enter both email and password");
       return;
     }
-    login(username, password, role);
-  };
 
+    const res = await login(email, password);
+    if (!res.success) {
+      alert(res.message);
+    }
+  };
 
   // Auto redirect after login based on role
   useEffect(() => {
@@ -49,10 +52,10 @@ export default function Login() {
             {/* Input Fields */}
             <div className="flex flex-col gap-4 mb-6">
               <input
-                type="text"
-                placeholder="Username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                type="email"
+                placeholder="Email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
               <input
@@ -64,34 +67,13 @@ export default function Login() {
               />
             </div>
 
-            {/* Role Login Buttons */}
-            <div className="flex flex-col gap-3">
-              <button
-                onClick={() => handleLogin("admin")}
-                className="w-full py-3 rounded-lg bg-blue-600 text-white font-semibold shadow-md hover:bg-blue-700 transition"
-              >
-                Login as Admin
-              </button>
-              <button
-                onClick={() => handleLogin("maker")}
-                className="w-full py-3 rounded-lg bg-green-600 text-white font-semibold shadow-md hover:bg-green-700 transition"
-              >
-                Login as Maker
-              </button>
-              <button
-                onClick={() => handleLogin("checker")}
-                className="w-full py-3 rounded-lg bg-purple-600 text-white font-semibold shadow-md hover:bg-purple-700 transition"
-              >
-                Login as Checker
-              </button>
-            </div>
-
-            {/* Divider */}
-            <div className="flex items-center my-6">
-              <div className="flex-grow h-px bg-gray-300"></div>
-              <span className="mx-2 text-gray-400 text-sm">OR</span>
-              <div className="flex-grow h-px bg-gray-300"></div>
-            </div>
+            {/* Login Button */}
+            <button
+              onClick={handleLogin}
+              className="w-full py-3 rounded-lg bg-blue-600 text-white font-semibold shadow-md hover:bg-blue-700 transition"
+            >
+              Login
+            </button>
           </>
         )}
       </div>

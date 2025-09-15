@@ -19,7 +19,6 @@ const protect = async (req, res, next) => {
 
     return res.status(401).json({ message: "Not authorized, no token" });
 };
-
 // Restrict routes to specific roles
 const authorize = (...roles) => {
     return (req, res, next) => {

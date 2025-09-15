@@ -6,9 +6,10 @@ const ROLES = {
 
 // Question Status
 const QUESTION_STATUS = {
-    PENDING: "pending",
-    APPROVED: "approved",
-    REJECTED: "rejected",
+    DRAFT: "Draft",
+    PENDING: "Pending",
+    APPROVED: "Approved",
+    REJECTED: "Rejected",
 };
 
 module.exports = {

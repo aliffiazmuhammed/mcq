@@ -1,45 +1,33 @@
 import { useEffect, useState } from "react";
-
-// Dummy data (replace with API later)
-const dummyDrafts = [
-  {
-    id: 1,
-    subject: "Mathematics",
-    chapter: "Algebra",
-    question: "What is the value of x if 2x + 3 = 7?",
-    status: "Draft",
-    createdAt: "2025-09-14",
-  },
-  {
-    id: 2,
-    subject: "Physics",
-    chapter: "Mechanics",
-    question: "State Newton’s second law of motion.",
-    status: "Draft",
-    createdAt: "2025-09-13",
-  },
-  {
-    id: 3,
-    subject: "Chemistry",
-    chapter: "Organic Chemistry",
-    question: "What is the molecular formula of benzene?",
-    status: "Draft",
-    createdAt: "2025-09-12",
-  },
-];
+import axios from "axios";
+import { useNavigate } from "react-router-dom";
 
 export default function DraftQuestions() {
   const [drafts, setDrafts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState([]);
   const [search, setSearch] = useState("");
+  const navigate = useNavigate();
 
-  // Simulate API fetch
+  // Fetch drafts from backend
   useEffect(() => {
-    setTimeout(() => {
-      setDrafts(dummyDrafts);
-      setLoading(false);
-    }, 1000);
+    const fetchDrafts = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const res = await axios.get(
+          "http://localhost:5000/api/questions/drafts",
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+        setDrafts(res.data)
+      } catch (err) {
+        console.error("Error fetching drafts", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchDrafts();
   }, []);
 
   const handleSelect = (id) => {
@@ -48,28 +36,61 @@ export default function DraftQuestions() {
     );
   };
 
-  const handleSubmitForApproval = () => {
-    alert(`Submitting ${selected.length} questions for approval...`);
-    setSelected([]);
-  };
+const handleSubmitForApproval = async () => {
+  if (selected.length === 0) return;
 
-  const handleDeleteSelected = () => {
-    if (
-      window.confirm(
-        `Are you sure you want to delete ${selected.length} draft(s)?`
-      )
-    ) {
-      setDrafts((prev) => prev.filter((q) => !selected.includes(q.id)));
-      setSelected([]);
+  if (!window.confirm(`Submit ${selected.length} draft(s) for approval?`))
+    return;
+
+  try {
+    const token = localStorage.getItem("token");
+    const res = await axios.put(
+      "http://localhost:5000/api/questions/submit",
+      { ids: selected },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    alert(res.data.message);
+
+    // Remove submitted drafts from the list
+    setDrafts((prev) => prev.filter((q) => !selected.includes(q._id)));
+
+    setSelected([]); // clear selection
+  } catch (err) {
+    console.error("Submit for approval failed", err);
+    alert("Failed to submit drafts");
+  }
+};
+
+
+  const handleDeleteSelected = async () => {
+    if (window.confirm(`Delete ${selected.length} draft(s)?`)) {
+      try {
+        const token = localStorage.getItem("token");
+        await axios.delete("http://localhost:5000/api/questions/delete", {
+          headers: { Authorization: `Bearer ${token}` },
+          data: { ids: selected },
+        });
+        setDrafts((prev) => prev.filter((q) => !selected.includes(q._id)));
+        setSelected([]);
+      } catch (err) {
+        console.error("Delete failed", err);
+      }
     }
   };
 
-  const filteredDrafts = drafts.filter(
-    (q) =>
-      q.question.toLowerCase().includes(search.toLowerCase()) ||
-      q.subject.toLowerCase().includes(search.toLowerCase()) ||
-      q.chapter.toLowerCase().includes(search.toLowerCase())
-  );
+  // Safe filtering to prevent crashes
+  const filteredDrafts = drafts.filter((q) => {
+    const text = q?.questionText || "";
+    const subject = q?.subject || "";
+    const chapter = q?.chapter || "";
+
+    return (
+      text.toLowerCase().includes(search.toLowerCase()) ||
+      subject.toLowerCase().includes(search.toLowerCase()) ||
+      chapter.toLowerCase().includes(search.toLowerCase())
+    );
+  });
 
   return (
     <div className="relative min-h-screen pb-24 md:pb-6">
@@ -114,17 +135,6 @@ export default function DraftQuestions() {
           </div>
         </div>
 
-        {/* Search (mobile) */}
-        <div className="md:hidden mb-4">
-          <input
-            type="text"
-            placeholder="Search drafts..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="border border-gray-300 rounded px-3 py-2 w-full focus:ring-2 focus:ring-blue-500 outline-none"
-          />
-        </div>
-
         {/* Loader */}
         {loading ? (
           <div className="flex justify-center items-center h-40">
@@ -136,26 +146,61 @@ export default function DraftQuestions() {
           <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
             {filteredDrafts.map((q) => (
               <div
-                key={q.id}
+                key={q._id}
                 className="border border-gray-200 rounded-lg shadow-sm p-4 hover:shadow-md transition"
               >
                 <div className="flex items-start justify-between">
                   <input
                     type="checkbox"
-                    checked={selected.includes(q.id)}
-                    onChange={() => handleSelect(q.id)}
+                    checked={selected.includes(q._id)}
+                    onChange={() => handleSelect(q._id)}
                     className="w-4 h-4 mt-1 accent-blue-600"
                   />
-                  <span className="text-xs text-gray-400">{q.createdAt}</span>
+                  <span className="text-xs text-gray-400">
+                    {new Date(q.createdAt).toLocaleDateString()}
+                  </span>
                 </div>
+
+                {/* Question Text */}
                 <h2 className="font-semibold text-base md:text-lg mt-2 line-clamp-2">
-                  {q.question}
+                  {q.text || "Untitled Question"}
                 </h2>
-                <p className="text-xs md:text-sm text-gray-600 mt-1">
-                  <span className="font-medium">Subject:</span> {q.subject} |{" "}
-                  <span className="font-medium">Chapter:</span> {q.chapter}
-                </p>
-                <p className="text-xs mt-2 text-gray-500">Status: {q.status}</p>
+
+                {/* Details */}
+                <div className="text-xs md:text-sm text-gray-600 mt-1 space-y-1">
+                  <p>
+                    <span className="font-medium">Course:</span>{" "}
+                    {q.course || "N/A"}
+                  </p>
+                  <p>
+                    <span className="font-medium">Grade:</span>{" "}
+                    {q.grade || "N/A"}
+                  </p>
+                  <p>
+                    <span className="font-medium">Subject:</span>{" "}
+                    {q.subject || "N/A"}
+                  </p>
+                  <p>
+                    <span className="font-medium">Chapter:</span>{" "}
+                    {q.chapter || "N/A"}
+                  </p>
+                  <p>
+                    <span className="font-medium">Difficulty:</span>{" "}
+                    {q.complexity || "N/A"}
+                  </p>
+                  <p>
+                    <span className="font-medium">Status:</span>{" "}
+                    {q.status || "N/A"}
+                  </p>
+                </div>
+
+                {/* Edit Draft Button */}
+                <button
+                  onClick={() => navigate(`/maker/create/${q._id}`)}
+                  className="mt-3 px-3 py-1 text-sm rounded bg-yellow-500 text-white hover:bg-yellow-600"
+                >
+                  Edit Draft
+                </button>
               </div>
             ))}
           </div>

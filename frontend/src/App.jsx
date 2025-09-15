@@ -77,17 +77,16 @@ export default function App() {
           >
             <Route index element={<h1>Maker Dashboard</h1>} />
             <Route path="create" element={<CreateQuestion />} />
+            <Route path="create/:id" element={<CreateQuestion />} />
             <Route path="drafts" element={<DraftQuestions />} />
             <Route path="submitted" element={<SubmittedQuestions />} />
           </Route>
 
-         
-            <Route path="/checker" element={<CheckerPage />}>
-              <Route path="dashboard" element={<h1>dash</h1>} />
-              <Route path="review" element={<CheckerReview/>} />
-              <Route path="accepted" element={<AcceptedQuestions/>} />
-            </Route>
-          
+          <Route path="/checker" element={<CheckerPage />}>
+            <Route path="dashboard" element={<h1>dash</h1>} />
+            <Route path="review" element={<CheckerReview />} />
+            <Route path="accepted" element={<AcceptedQuestions />} />
+          </Route>
 
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/login" replace />} />

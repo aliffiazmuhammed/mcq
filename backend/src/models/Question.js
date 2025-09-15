@@ -12,14 +12,35 @@ const questionSchema = new mongoose.Schema(
             type: String,
             required: [true, "Subject is required"],
         },
+        course: {
+            type: String,
+        },
+        grade: {
+            type: String,
+        },
+        chapter: {
+            type: String,
+        },
         options: [
             {
                 text: { type: String, required: true },
                 isCorrect: { type: Boolean, default: false },
+                // image will be added later
             },
         ],
+        explanation: {
+            type: String,
+        },
+        complexity: {
+            type: String,
+            enum: ["Easy", "Medium", "Hard"],
+            default: "Easy",
+        },
+        keywords: {
+            type: [String], // store as array for easy search
+        },
         referenceFile: {
-            type: String, // file path or URL
+            type: String, // for image/pdf uploads later
         },
         maker: {
             type: mongoose.Schema.Types.ObjectId,

@@ -1,45 +1,68 @@
-import { createContext, useContext, useState } from "react";
+import React, { createContext, useContext, useState, useEffect } from "react";
+import axios from "axios";
+import { jwtDecode } from "jwt-decode";
 
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null); // user = { username, role }
+  const [user, setUser] = useState(null); // { email, role }
+  const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // Dummy users with passwords
-  const dummyUsers = [
-    { username: "adminUser", password: "admin123", role: "admin" },
-    { username: "makerUser", password: "maker123", role: "maker" },
-    { username: "checkerUser", password: "checker123", role: "checker" },
-  ];
-
-  // Login function with username + password check
-  const login = (username, password, role) => {
-    setLoading(true);
-
-    setTimeout(() => {
-      const foundUser = dummyUsers.find(
-        (u) =>
-          u.username === username && u.password === password && u.role === role
-      );
-
-      if (foundUser) {
-        setUser(foundUser);
-      } else {
-        alert("Invalid credentials. Please try again.");
-        setUser(null);
+  // Check auth from localStorage when app loads
+  useEffect(() => {
+    const storedToken = localStorage.getItem("token");
+    if (storedToken) {
+      try {
+        const decoded = jwtDecode(storedToken);
+        setUser({ email: decoded.email, role: decoded.role });
+        setToken(storedToken);
+      } catch (err) {
+        console.error("Invalid token", err);
+        localStorage.removeItem("token");
       }
+    }
+  }, []);
+
+  // Login function
+  const login = async (email, password) => {
+    console.log(email, "+" , password)
+    setLoading(true);
+    try {
+      const res = await axios.post("http://localhost:5000/api/auth/login", {
+        email,
+        password,
+      });
+      console.log(res.data)
+
+      if (res.data.token) {
+        localStorage.setItem("token", res.data.token);
+        setToken(res.data.token);
+
+        const decoded = jwtDecode(res.data.token);
+        setUser({ email: decoded.email, role: decoded.role });
+        return { success: true, role: decoded.role };
+      }
+    } catch (err) {
+      console.error("Login failed", err.response?.data || err.message);
+      return {
+        success: false,
+        message: err.response?.data?.message || "Login failed",
+      };
+    } finally {
       setLoading(false);
-    }, 1000); // simulate API delay
+    }
   };
 
   // Logout function
   const logout = () => {
+    localStorage.removeItem("token");
     setUser(null);
+    setToken(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, loading }}>
+    <AuthContext.Provider value={{ user, token, login, logout, loading }}>
       {children}
     </AuthContext.Provider>
   );

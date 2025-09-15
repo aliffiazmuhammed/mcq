@@ -1,10 +1,17 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import Cropper from "react-easy-crop";
 import Modal from "react-modal";
 import { getCroppedImg } from "../../utils/cropImage";
+import axios from "axios";
+import { useParams } from "react-router-dom";
 
 export default function CreateQuestion() {
-  const [formData, setFormData] = useState({
+
+  const { id } = useParams();
+
+  
+
+  const initialFormData = {
     course: "",
     grade: "",
     subject: "",
@@ -14,14 +21,16 @@ export default function CreateQuestion() {
     choices: [
       { text: "", image: null },
       { text: "", image: null },
-    ], // ✅ At least 2 choices
+    ],
     correctAnswer: 0,
     explanation: "",
     explanationImage: null,
     complexity: "Easy",
     keywords: "",
     referenceImage: null,
-  });
+  };
+
+  const [formData, setFormData] = useState(initialFormData);
 
   const [cropModal, setCropModal] = useState({
     open: false,
@@ -33,6 +42,52 @@ export default function CreateQuestion() {
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
   const [loading, setLoading] = useState(false);
+
+
+ useEffect(() => {
+   if (id) {
+     const fetchDraft = async () => {
+       try {
+         const token = localStorage.getItem("token");
+         const res = await axios.get(
+           `http://localhost:5000/api/questions/${id}`,
+           {
+             headers: { Authorization: `Bearer ${token}` },
+           }
+         );
+
+         const q = res.data;
+
+         // Map backend Question → formData shape
+         setFormData({
+           _id: q._id,
+           course: q.course || "",
+           grade: q.grade || "",
+           subject: q.subject || "",
+           chapter: q.chapter || "",
+           questionText: q.text || "", // backend has "text"
+           questionImage: null, // load images later if needed
+           choices: q.options?.map((opt) => ({
+             text: opt.text,
+             image: null,
+           })) || [
+             { text: "", image: null },
+             { text: "", image: null },
+           ],
+           correctAnswer: q.options?.findIndex((opt) => opt.isCorrect) ?? 0,
+           explanation: q.explanation || "",
+           explanationImage: null,
+           complexity: q.complexity || "Easy",
+           keywords: q.keywords || "",
+           referenceImage: null,
+         });
+       } catch (err) {
+         console.error("Error loading draft", err);
+       }
+     };
+     fetchDraft();
+   }
+ }, [id]);
 
   const onCropComplete = useCallback((_, croppedAreaPixels) => {
     setCroppedAreaPixels(croppedAreaPixels);
@@ -109,14 +164,46 @@ export default function CreateQuestion() {
   };
 
   // Submit question (Draft / Submit)
-  const handleSubmit = (type) => {
-    setLoading(true);
-    setTimeout(() => {
-      console.log(type, formData);
-      alert(`${type} functionality will be implemented with backend.`);
-      setLoading(false);
-    }, 1500);
-  };
+const handleSubmit = async (type) => {
+  setLoading(true);
+  try {
+    const payload = {
+      _id: formData._id || undefined,
+      course: formData.course,
+      grade: formData.grade,
+      subject: formData.subject,
+      chapter: formData.chapter,
+      questionText: formData.questionText,
+      choices: formData.choices.map((c) => ({ text: c.text })),
+      correctAnswer: formData.correctAnswer,
+      explanation: formData.explanation,
+      complexity: formData.complexity,
+      keywords: formData.keywords,
+      status: type === "Draft" ? "Draft" : "Pending",
+    };
+
+    const token = localStorage.getItem("token");
+    const res = await axios.post(
+      "http://localhost:5000/api/questions/create",
+      payload,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+
+    alert(
+      `Question ${
+        type === "Draft" ? "saved as draft" : "submitted"
+      } successfully!`
+    );
+    setFormData(initialFormData); // ✅ Reset form
+  } catch (err) {
+    console.error(err);
+    alert("Error saving question");
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div className="max-w-5xl mx-auto p-6 bg-white rounded-lg shadow-md relative">

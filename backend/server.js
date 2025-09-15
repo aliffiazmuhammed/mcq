@@ -2,8 +2,8 @@ const express = require("express");
 const dotenv = require("dotenv");
 const cors = require("cors");
 const connectDB = require("./src/config/db");
-// import authRoutes from "./src/routes/authRoutes.js";
-// import questionRoutes from "./src/routes/questionRoutes.js";
+const authRoutes = require("./src/routes/authRoutes.js");
+const questionRoutes =  require ("./src/routes/questionRoutes.js");
 // import checkerRoutes from "./src/routes/checkerRoutes.js";
 
 dotenv.config();
@@ -14,8 +14,8 @@ app.use(cors());
 app.use(express.json());
 
 // Routes
-// app.use("/api/auth", authRoutes);
-// app.use("/api/questions", questionRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/questions", questionRoutes);
 // app.use("/api/checker", checkerRoutes);
 
 // Error handler
