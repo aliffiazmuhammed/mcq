@@ -1,77 +1,101 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import axios from "axios";
 
 export default function CheckerReview() {
-  const [questions, setQuestions] = useState([
-    {
-      id: 1,
-      text: "What is the capital of France?",
-      maker: "John Doe",
-      subject: "Geography",
-      chapter: "Europe",
-      status: "Pending",
-      choices: [
-        { text: "Paris", image: null },
-        { text: "London", image: null },
-        { text: "Rome", image: null },
-        { text: "Berlin", image: null },
-      ],
-      correctAnswer: 0,
-      explanation: "Paris is the capital city of France.",
-      referenceImage: null,
-      comments: "",
-    },
-    {
-      id: 2,
-      text: "Solve 12 × 8",
-      maker: "Jane Smith",
-      subject: "Math",
-      chapter: "Multiplication",
-      status: "Pending",
-      choices: [
-        { text: "90", image: null },
-        { text: "96", image: null },
-        { text: "108", image: null },
-        { text: "84", image: null },
-      ],
-      correctAnswer: 1,
-      explanation: "12 × 8 = 96",
-      referenceImage: null,
-      comments: "",
-    },
-  ]);
-
+  const [questions, setQuestions] = useState([]);
   const [selectedQuestions, setSelectedQuestions] = useState([]);
   const [expandedQuestion, setExpandedQuestion] = useState(null);
-  const [rejectionComment, setRejectionComment] = useState("");
+  const [comments, setComments] = useState({}); // store comments per question
+
+  // Fetch pending questions from backend
+  useEffect(() => {
+    const fetchPending = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const res = await axios.get(
+          "http://localhost:5000/api/checker/questions/pending",
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+        setQuestions(res.data);
+      } catch (err) {
+        console.error("Error fetching pending questions", err);
+      }
+    };
+    fetchPending();
+  }, []);
 
   // Toggle selection for bulk approve
   const toggleSelect = (id) => {
-    if (selectedQuestions.includes(id)) {
-      setSelectedQuestions(selectedQuestions.filter((q) => q !== id));
-    } else {
-      setSelectedQuestions([...selectedQuestions, id]);
+    setSelectedQuestions((prev) =>
+      prev.includes(id) ? prev.filter((q) => q !== id) : [...prev, id]
+    );
+  };
+
+  // Bulk Approve
+  const handleBulkApprove = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      await Promise.all(
+        selectedQuestions.map((id) =>
+          axios.put(
+            `http://localhost:5000/api/checker/questions/${id}/approve`,
+            {},
+            { headers: { Authorization: `Bearer ${token}` } }
+          )
+        )
+      );
+
+      setQuestions((prev) =>
+        prev.map((q) =>
+          selectedQuestions.includes(q._id) ? { ...q, status: "Approved" } : q
+        )
+      );
+      setSelectedQuestions([]);
+    } catch (err) {
+      console.error("Bulk approve failed", err);
     }
   };
 
-  const handleBulkApprove = () => {
-    setQuestions((prev) =>
-      prev.map((q) =>
-        selectedQuestions.includes(q.id) ? { ...q, status: "Approved" } : q
-      )
-    );
-    setSelectedQuestions([]);
+  // Approve single
+  const handleApprove = async (id) => {
+    try {
+      const token = localStorage.getItem("token");
+      await axios.put(
+        `http://localhost:5000/api/checker/questions/${id}/approve`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setQuestions((prev) =>
+        prev.map((q) => (q._id === id ? { ...q, status: "Approved" } : q))
+      );
+    } catch (err) {
+      console.error("Approve failed", err);
+    }
   };
 
-  const handleReject = (id) => {
-    if (!rejectionComment) return alert("Enter rejection comment!");
-    setQuestions((prev) =>
-      prev.map((q) =>
-        q.id === id
-          ? { ...q, status: "Rejected", comments: rejectionComment }
-          : q
-      )
-    );
-    setRejectionComment("");
+  // Reject single
+  const handleReject = async (id) => {
+    if (!comments[id]) return alert("Enter rejection comment!");
+    try {
+      const token = localStorage.getItem("token");
+      await axios.put(
+        `http://localhost:5000/api/checker/questions/${id}/reject`,
+        { comments: comments[id] },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setQuestions((prev) =>
+        prev.map((q) =>
+          q._id === id
+            ? { ...q, status: "Rejected", comments: comments[id] }
+            : q
+        )
+      );
+      setComments((prev) => ({ ...prev, [id]: "" })); // clear comment only for that question
+    } catch (err) {
+      console.error("Reject failed", err);
+    }
   };
 
   return (
@@ -94,10 +118,10 @@ export default function CheckerReview() {
       <div className="space-y-4">
         {questions.map((q) => (
           <div
-            key={q.id}
+            key={q._id}
             className="bg-white p-4 rounded shadow hover:bg-gray-50 cursor-pointer"
             onClick={() =>
-              setExpandedQuestion(expandedQuestion?.id === q.id ? null : q)
+              setExpandedQuestion(expandedQuestion?._id === q._id ? null : q)
             }
           >
             {/* Header: Question + Status + Checkbox */}
@@ -105,10 +129,10 @@ export default function CheckerReview() {
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"
-                  checked={selectedQuestions.includes(q.id)}
+                  checked={selectedQuestions.includes(q._id)}
                   onChange={(e) => {
                     e.stopPropagation();
-                    toggleSelect(q.id);
+                    toggleSelect(q._id);
                   }}
                   className="w-4 h-4"
                 />
@@ -128,10 +152,11 @@ export default function CheckerReview() {
             </div>
 
             {/* Expanded Details */}
-            {expandedQuestion?.id === q.id && (
+            {expandedQuestion?._id === q._id && (
               <div className="mt-4 border-t pt-4 space-y-3">
                 <p>
-                  <span className="font-semibold">Maker:</span> {q.maker}
+                  <span className="font-semibold">Maker:</span>{" "}
+                  {q.maker?.name || "Unknown"}
                 </p>
                 <p>
                   <span className="font-semibold">Subject:</span> {q.subject}
@@ -143,14 +168,14 @@ export default function CheckerReview() {
                   <span className="font-semibold">Question:</span> {q.text}
                 </p>
 
-                {/* Choices */}
+                {/* Options */}
                 <div>
-                  <p className="font-semibold">Choices:</p>
+                  <p className="font-semibold">Options:</p>
                   <ul className="list-decimal list-inside">
-                    {q.choices.map((c, idx) => (
+                    {q.options.map((opt, idx) => (
                       <li key={idx} className="flex items-center gap-2">
-                        {c.text}
-                        {q.correctAnswer === idx && (
+                        {opt.text}{" "}
+                        {opt.isCorrect && (
                           <span className="text-green-600 font-bold">
                             (Correct)
                           </span>
@@ -166,16 +191,7 @@ export default function CheckerReview() {
                   {q.explanation}
                 </p>
 
-                {/* Reference Image */}
-                {q.referenceImage && (
-                  <img
-                    src={URL.createObjectURL(q.referenceImage)}
-                    alt="Reference"
-                    className="max-h-48 mt-2"
-                  />
-                )}
-
-                {/* Rejection Comment */}
+                {/* Rejection Comment (displayed if rejected) */}
                 {q.status === "Rejected" && (
                   <p className="text-red-600">
                     <span className="font-semibold">Rejection Comment:</span>{" "}
@@ -189,13 +205,7 @@ export default function CheckerReview() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        setQuestions((prev) =>
-                          prev.map((ques) =>
-                            ques.id === q.id
-                              ? { ...ques, status: "Approved" }
-                              : ques
-                          )
-                        );
+                        handleApprove(q._id);
                       }}
                       className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700"
                     >
@@ -205,18 +215,22 @@ export default function CheckerReview() {
                     <input
                       type="text"
                       placeholder="Rejection comment"
-                      value={rejectionComment}
+                      value={comments[q._id] || ""}
                       onChange={(e) => {
                         e.stopPropagation();
-                        setRejectionComment(e.target.value);
+                        setComments((prev) => ({
+                          ...prev,
+                          [q._id]: e.target.value,
+                        }));
                       }}
                       className="border px-2 py-1 rounded flex-1"
+                      onClick={(e) => e.stopPropagation()}
                     />
 
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleReject(q.id);
+                        handleReject(q._id);
                       }}
                       className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700"
                     >

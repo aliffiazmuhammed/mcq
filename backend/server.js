@@ -4,7 +4,7 @@ const cors = require("cors");
 const connectDB = require("./src/config/db");
 const authRoutes = require("./src/routes/authRoutes.js");
 const questionRoutes =  require ("./src/routes/questionRoutes.js");
-// import checkerRoutes from "./src/routes/checkerRoutes.js";
+const checkerRoutes = require("./src/routes/checkerRoutes.js");
 
 dotenv.config();
 connectDB();
@@ -16,7 +16,7 @@ app.use(express.json());
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/questions", questionRoutes);
-// app.use("/api/checker", checkerRoutes);
+app.use("/api/checker", checkerRoutes);
 
 // Error handler
 app.use((err, req, res, next) => {

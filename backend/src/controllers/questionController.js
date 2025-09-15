@@ -166,7 +166,7 @@ const getSubmittedQuestions = async (req, res) => {
             _id: q._id,
             questionText: q.text,
             status: q.status, // "Pending", "Approved", "Rejected"
-            comments: q.rejectionComments || "", // only relevant if rejected
+            comments: q.checkerComments || "", // only relevant if rejected
             course: q.course,
             grade: q.grade,
             subject: q.subject,

@@ -1,118 +1,127 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import axios from "axios";
 
 export default function AcceptedQuestions() {
-  const [questions] = useState([
-    {
-      id: 1,
-      text: "What is the capital of France?",
-      maker: "John Doe",
-      subject: "Geography",
-      chapter: "Europe",
-      status: "Approved",
-      choices: [
-        { text: "Paris", image: null },
-        { text: "London", image: null },
-        { text: "Rome", image: null },
-        { text: "Berlin", image: null },
-      ],
-      correctAnswer: 0,
-      explanation: "Paris is the capital city of France.",
-      referenceImage: null,
-    },
-    {
-      id: 2,
-      text: "Solve 12 × 8",
-      maker: "Jane Smith",
-      subject: "Math",
-      chapter: "Multiplication",
-      status: "Approved",
-      choices: [
-        { text: "90", image: null },
-        { text: "96", image: null },
-        { text: "108", image: null },
-        { text: "84", image: null },
-      ],
-      correctAnswer: 1,
-      explanation: "12 × 8 = 96",
-      referenceImage: null,
-    },
-  ]);
-
+  const [questions, setQuestions] = useState([]);
   const [expandedQuestion, setExpandedQuestion] = useState(null);
+
+  // Fetch reviewed questions
+  useEffect(() => {
+    const fetchReviewedQuestions = async () => {
+      try {
+        const res = await axios.get(
+          "http://localhost:5000/api/checker/questions/reviewed"
+        );
+        setQuestions(res.data); // backend sends an array of reviewed questions
+      } catch (err) {
+        console.error("Error fetching reviewed questions:", err);
+      }
+    };
+    fetchReviewedQuestions();
+  }, []);
 
   return (
     <div className="max-w-5xl mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">Approved Questions</h1>
+      <h1 className="text-2xl font-bold mb-4">Reviewed Questions</h1>
 
-      <div className="space-y-4">
-        {questions.map((q) => (
-          <div
-            key={q.id}
-            className="bg-white p-4 rounded shadow hover:bg-gray-50 cursor-pointer"
-            onClick={() =>
-              setExpandedQuestion(expandedQuestion?.id === q.id ? null : q)
-            }
-          >
-            {/* Header: Question + Status */}
-            <div className="flex justify-between items-center">
-              <p className="font-semibold">{q.text}</p>
-              <span className="px-2 py-1 rounded text-sm bg-green-100 text-green-800">
-                {q.status}
-              </span>
-            </div>
-
-            {/* Expanded Details */}
-            {expandedQuestion?.id === q.id && (
-              <div className="mt-4 border-t pt-4 space-y-3">
-                <p>
-                  <span className="font-semibold">Maker:</span> {q.maker}
-                </p>
-                <p>
-                  <span className="font-semibold">Subject:</span> {q.subject}
-                </p>
-                <p>
-                  <span className="font-semibold">Chapter:</span> {q.chapter}
-                </p>
-                <p>
-                  <span className="font-semibold">Question:</span> {q.text}
-                </p>
-
-                {/* Choices */}
-                <div>
-                  <p className="font-semibold">Choices:</p>
-                  <ul className="list-decimal list-inside">
-                    {q.choices.map((c, idx) => (
-                      <li key={idx} className="flex items-center gap-2">
-                        {c.text}
-                        {q.correctAnswer === idx && (
-                          <span className="text-green-600 font-bold">
-                            (Correct)
-                          </span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                {/* Explanation */}
-                <p>
-                  <span className="font-semibold">Explanation:</span>{" "}
-                  {q.explanation}
-                </p>
-
-                {/* Reference Image */}
-                {q.referenceImage && (
-                  <img
-                    src={URL.createObjectURL(q.referenceImage)}
-                    alt="Reference"
-                    className="max-h-48 mt-2"
-                  />
-                )}
+      {questions.length === 0 ? (
+        <p className="text-gray-500">No reviewed questions yet.</p>
+      ) : (
+        <div className="space-y-4">
+          {questions.map((q) => (
+            <div
+              key={q._id}
+              className="bg-white p-4 rounded shadow hover:bg-gray-50 cursor-pointer"
+              onClick={() =>
+                setExpandedQuestion(expandedQuestion?._id === q._id ? null : q)
+              }
+            >
+              {/* Header: Question + Status */}
+              <div className="flex justify-between items-center">
+                <p className="font-semibold">{q.text}</p>
+                <span
+                  className={`px-2 py-1 rounded text-sm ${
+                    q.status === "Approved"
+                      ? "bg-green-100 text-green-800"
+                      : "bg-red-100 text-red-800"
+                  }`}
+                >
+                  {q.status}
+                </span>
               </div>
-            )}
-          </div>
-        ))}
-      </div>
+
+              {/* Expanded Details */}
+              {expandedQuestion?._id === q._id && (
+                <div className="mt-4 border-t pt-4 space-y-3">
+                  <p>
+                    <span className="font-semibold">Maker:</span>{" "}
+                    {q.maker?.name} ({q.maker?.email})
+                  </p>
+                  <p>
+                    <span className="font-semibold">Subject:</span> {q.subject}
+                  </p>
+                  <p>
+                    <span className="font-semibold">Chapter:</span> {q.chapter}
+                  </p>
+                  <p>
+                    <span className="font-semibold">Grade:</span> {q.grade}
+                  </p>
+                  <p>
+                    <span className="font-semibold">Course:</span> {q.course}
+                  </p>
+                  <p>
+                    <span className="font-semibold">Complexity:</span>{" "}
+                    {q.complexity}
+                  </p>
+                  <p>
+                    <span className="font-semibold">Keywords:</span>{" "}
+                    {q.keywords?.join(", ")}
+                  </p>
+
+                  {/* Options */}
+                  <div>
+                    <p className="font-semibold">Options:</p>
+                    <ul className="list-decimal list-inside">
+                      {q.options.map((opt, idx) => (
+                        <li key={idx} className="flex items-center gap-2">
+                          {opt.text}
+                          {opt.isCorrect && (
+                            <span className="text-green-600 font-bold">
+                              (Correct)
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {/* Explanation */}
+                  <p>
+                    <span className="font-semibold">Explanation:</span>{" "}
+                    {q.explanation}
+                  </p>
+
+                  {/* Checker Comment (only for rejected) */}
+                  {q.checkerComment && (
+                    <p>
+                      <span className="font-semibold">Checker Comment:</span>{" "}
+                      {q.checkerComment}
+                    </p>
+                  )}
+
+                  {/* Created/Updated Dates */}
+                  <p className="text-sm text-gray-500">
+                    Created: {new Date(q.createdAt).toLocaleString()}
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    Updated: {new Date(q.updatedAt).toLocaleString()}
+                  </p>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
