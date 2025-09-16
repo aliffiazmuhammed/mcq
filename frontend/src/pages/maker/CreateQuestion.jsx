@@ -181,7 +181,7 @@ const handleSubmit = async (type) => {
     };
 
     const token = localStorage.getItem("token");
-    const res = await axios.post(`${host}/api/questions/create, payload`, {
+    const res = await axios.post(`${host}/api/questions/create`, payload, {
       headers: { Authorization: `Bearer ${token}` },
     });
 
