@@ -1,1 +1,1 @@
-export const host = "https://mcq-one-xi.vercel.app/";
+export const host = "https://mcq-one-xi.vercel.app";
