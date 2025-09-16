@@ -9,7 +9,6 @@ export default function Sidebar() {
 
   // Sidebar menu items (Maker-specific)
   const menuItems = [
-    { name: "Dashboard", path: "/maker/dashboard", icon: "📊" },
     { name: "Create Question", path: "/maker/create", icon: "➕" },
     { name: "Draft Questions", path: "/maker/drafts", icon: "📝" },
     { name: "Submitted Questions", path: "/maker/submitted", icon: "📤" },

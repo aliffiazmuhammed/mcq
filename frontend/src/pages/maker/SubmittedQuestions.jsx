@@ -1,23 +1,25 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
+import { host } from "../../utils/APIRoutes";
 
 export default function SubmittedQuestions() {
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedComments, setSelectedComments] = useState(null);
 
-  // Fetch submitted questions from backend
+  // Filters
+  const [search, setSearch] = useState("");
+  const [filterStatus, setFilterStatus] = useState("All");
+  const [filterMaker, setFilterMaker] = useState("All");
+  const [filterCourse, setFilterCourse] = useState("All");
+
   useEffect(() => {
     const fetchQuestions = async () => {
       try {
         const token = localStorage.getItem("token");
-        const res = await axios.get(
-          "http://localhost:5000/api/questions/submitted",
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          }
-        );
-        // Normalize status to first letter uppercase
+        const res = await axios.get(`${host}/api/questions/submitted`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
         const formatted = res.data.map((q) => ({
           ...q,
           status:
@@ -33,24 +35,77 @@ export default function SubmittedQuestions() {
     fetchQuestions();
   }, []);
 
-  const handleViewComments = (question) => {
-    setSelectedComments(question);
-  };
+  const handleViewComments = (question) => setSelectedComments(question);
+  const handleCloseComments = () => setSelectedComments(null);
 
-  const handleCloseComments = () => {
-    setSelectedComments(null);
-  };
+  // Unique values for dropdowns
+  const makers = [
+    "All",
+    ...new Set(questions.map((q) => q.maker?.name).filter(Boolean)),
+  ];
+  const courses = [
+    "All",
+    ...new Set(questions.map((q) => q.course).filter(Boolean)),
+  ];
+
+  // Apply search + filters
+  const filteredQuestions = questions.filter((q) => {
+    const textToSearch = (q.text || q.questionText || "").toLowerCase();
+    const matchesSearch = textToSearch.includes(search.toLowerCase().trim());
+
+    const matchesStatus = filterStatus === "All" || q.status === filterStatus;
+
+    const matchesMaker = filterMaker === "All" || q.maker?.name === filterMaker;
+
+    const matchesCourse = filterCourse === "All" || q.course === filterCourse;
+
+    return matchesSearch && matchesStatus && matchesMaker && matchesCourse;
+  });
 
   return (
     <div className="max-w-6xl mx-auto p-6 bg-white rounded-lg shadow-md">
       <h1 className="text-2xl font-bold mb-6">Submitted Questions</h1>
 
+      {/* Filters + Search */}
+      <div className="flex flex-wrap gap-4 mb-6">
+        <input
+          type="text"
+          placeholder="Search question text..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="border px-3 py-2 rounded w-full sm:w-1/3"
+        />
+
+        <select
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value)}
+          className="border px-3 py-2 rounded"
+        >
+          <option value="All">All Status</option>
+          <option value="Pending">Pending</option>
+          <option value="Approved">Approved</option>
+          <option value="Rejected">Rejected</option>
+        </select>
+
+        <select
+          value={filterCourse}
+          onChange={(e) => setFilterCourse(e.target.value)}
+          className="border px-3 py-2 rounded"
+        >
+          {courses.map((c, idx) => (
+            <option key={idx} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+      </div>
+
       {loading ? (
         <div className="flex justify-center items-center h-40">
           <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
         </div>
-      ) : questions.length === 0 ? (
-        <p className="text-gray-500">No submitted questions found.</p>
+      ) : filteredQuestions.length === 0 ? (
+        <p className="text-gray-500">No questions match your filters.</p>
       ) : (
         <>
           {/* Table for desktop */}
@@ -69,9 +124,9 @@ export default function SubmittedQuestions() {
                 </tr>
               </thead>
               <tbody>
-                {questions.map((q) => (
+                {filteredQuestions.map((q) => (
                   <tr key={q._id} className="hover:bg-gray-50">
-                    <td className="p-3 border-b">{q.questionText}</td>
+                    <td className="p-3 border-b">{q.questionText || q.text}</td>
                     <td className="p-3 border-b">{q.course}</td>
                     <td className="p-3 border-b">{q.grade}</td>
                     <td className="p-3 border-b">{q.subject}</td>
@@ -122,15 +177,14 @@ export default function SubmittedQuestions() {
 
           {/* Mobile Cards */}
           <div className="sm:hidden space-y-4 mt-4">
-            {questions.map((q) => (
+            {filteredQuestions.map((q) => (
               <div
                 key={q._id}
                 className="border rounded-lg p-4 shadow-sm bg-gray-50"
               >
-                <p className="font-semibold mb-1">{q.questionText}</p>
+                <p className="font-semibold mb-1">{q.questionText || q.text}</p>
                 <p className="text-sm mb-1">
-                  Course: {q.course} | Grade: {q.grade} | Subject: {q.subject} |
-                  Chapter: {q.chapter}
+                  Subject: {q.subject} | Chapter: {q.chapter}
                 </p>
                 <p className="text-sm mb-1">Difficulty: {q.complexity}</p>
                 <p className="text-sm mb-2">

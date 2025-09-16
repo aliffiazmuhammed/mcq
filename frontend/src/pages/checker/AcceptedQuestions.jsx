@@ -1,17 +1,22 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
+import { host } from "../../utils/APIRoutes";
 
 export default function AcceptedQuestions() {
   const [questions, setQuestions] = useState([]);
   const [expandedQuestion, setExpandedQuestion] = useState(null);
 
+  // Search & filter states
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [courseFilter, setCourseFilter] = useState("All");
+  const [makerFilter, setMakerFilter] = useState("All");
+
   // Fetch reviewed questions
   useEffect(() => {
     const fetchReviewedQuestions = async () => {
       try {
-        const res = await axios.get(
-          "http://localhost:5000/api/checker/questions/reviewed"
-        );
+        const res = await axios.get(`${host}/api/checker/questions/reviewed`);
         setQuestions(res.data); // backend sends an array of reviewed questions
       } catch (err) {
         console.error("Error fetching reviewed questions:", err);
@@ -20,15 +25,80 @@ export default function AcceptedQuestions() {
     fetchReviewedQuestions();
   }, []);
 
+  // Filtered + searched questions
+  const filteredQuestions = questions.filter((q) => {
+    const matchesSearch =
+      q.text?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      q.maker?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      q.course?.toLowerCase().includes(searchTerm.toLowerCase());
+
+    const matchesStatus = statusFilter === "All" || q.status === statusFilter;
+
+    const matchesCourse = courseFilter === "All" || q.course === courseFilter;
+
+    const matchesMaker = makerFilter === "All" || q.maker?.name === makerFilter;
+
+    return matchesSearch && matchesStatus && matchesCourse && matchesMaker;
+  });
+
   return (
     <div className="max-w-5xl mx-auto p-4">
       <h1 className="text-2xl font-bold mb-4">Reviewed Questions</h1>
 
-      {questions.length === 0 ? (
-        <p className="text-gray-500">No reviewed questions yet.</p>
+      {/* Search and Filters */}
+      <div className="flex flex-col sm:flex-row gap-3 mb-6">
+        <input
+          type="text"
+          placeholder="Search by text, maker, or course..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="border rounded px-3 py-2 w-full sm:w-1/3"
+        />
+
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="border rounded px-3 py-2 w-full sm:w-1/5"
+        >
+          <option value="All">All Status</option>
+          <option value="Approved">Approved</option>
+          <option value="Rejected">Rejected</option>
+        </select>
+
+        <select
+          value={courseFilter}
+          onChange={(e) => setCourseFilter(e.target.value)}
+          className="border rounded px-3 py-2 w-full sm:w-1/5"
+        >
+          <option value="All">All Courses</option>
+          {[...new Set(questions.map((q) => q.course))].map((course) => (
+            <option key={course} value={course}>
+              {course}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={makerFilter}
+          onChange={(e) => setMakerFilter(e.target.value)}
+          className="border rounded px-3 py-2 w-full sm:w-1/5"
+        >
+          <option value="All">All Makers</option>
+          {[...new Set(questions.map((q) => q.maker?.name))].map((maker) => (
+            <option key={maker} value={maker}>
+              {maker}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {filteredQuestions.length === 0 ? (
+        <p className="text-gray-500">
+          No reviewed questions match your filter.
+        </p>
       ) : (
         <div className="space-y-4">
-          {questions.map((q) => (
+          {filteredQuestions.map((q) => (
             <div
               key={q._id}
               className="bg-white p-4 rounded shadow hover:bg-gray-50 cursor-pointer"

@@ -4,6 +4,7 @@ import Modal from "react-modal";
 import { getCroppedImg } from "../../utils/cropImage";
 import axios from "axios";
 import { useParams } from "react-router-dom";
+import { host } from "../../utils/APIRoutes";
 
 export default function CreateQuestion() {
 
@@ -49,12 +50,9 @@ export default function CreateQuestion() {
      const fetchDraft = async () => {
        try {
          const token = localStorage.getItem("token");
-         const res = await axios.get(
-           `http://localhost:5000/api/questions/${id}`,
-           {
-             headers: { Authorization: `Bearer ${token}` },
-           }
-         );
+         const res = await axios.get(`${host}/api/questions/${id}`, {
+           headers: { Authorization: `Bearer ${token}` },
+         });
 
          const q = res.data;
 
@@ -183,13 +181,9 @@ const handleSubmit = async (type) => {
     };
 
     const token = localStorage.getItem("token");
-    const res = await axios.post(
-      "http://localhost:5000/api/questions/create",
-      payload,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      }
-    );
+    const res = await axios.post(`${host}/api/questions/create, payload`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
 
     alert(
       `Question ${

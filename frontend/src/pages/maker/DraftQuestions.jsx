@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import { host } from "../../utils/APIRoutes";
 
 export default function DraftQuestions() {
   const [drafts, setDrafts] = useState([]);
@@ -14,12 +15,9 @@ export default function DraftQuestions() {
     const fetchDrafts = async () => {
       try {
         const token = localStorage.getItem("token");
-        const res = await axios.get(
-          "http://localhost:5000/api/questions/drafts",
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          }
-        );
+        const res = await axios.get(`${host}/api/questions/drafts`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
         setDrafts(res.data)
       } catch (err) {
         console.error("Error fetching drafts", err);
@@ -45,7 +43,7 @@ const handleSubmitForApproval = async () => {
   try {
     const token = localStorage.getItem("token");
     const res = await axios.put(
-      "http://localhost:5000/api/questions/submit",
+      `${host}/api/questions/submit`,
       { ids: selected },
       { headers: { Authorization: `Bearer ${token}` } }
     );
@@ -67,7 +65,7 @@ const handleSubmitForApproval = async () => {
     if (window.confirm(`Delete ${selected.length} draft(s)?`)) {
       try {
         const token = localStorage.getItem("token");
-        await axios.delete("http://localhost:5000/api/questions/delete", {
+        await axios.delete(`${host}/api/questions/delete`, {
           headers: { Authorization: `Bearer ${token}` },
           data: { ids: selected },
         });

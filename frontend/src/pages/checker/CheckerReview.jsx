@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
+import { host } from "../../utils/APIRoutes";
 
 export default function CheckerReview() {
   const [questions, setQuestions] = useState([]);
@@ -12,12 +13,9 @@ export default function CheckerReview() {
     const fetchPending = async () => {
       try {
         const token = localStorage.getItem("token");
-        const res = await axios.get(
-          "http://localhost:5000/api/checker/questions/pending",
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          }
-        );
+        const res = await axios.get(`${host}/api/checker/questions/pending`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
         setQuestions(res.data);
       } catch (err) {
         console.error("Error fetching pending questions", err);
@@ -40,7 +38,7 @@ export default function CheckerReview() {
       await Promise.all(
         selectedQuestions.map((id) =>
           axios.put(
-            `http://localhost:5000/api/checker/questions/${id}/approve`,
+            `${host}/api/checker/questions/${id}/approve`,
             {},
             { headers: { Authorization: `Bearer ${token}` } }
           )
@@ -63,7 +61,7 @@ export default function CheckerReview() {
     try {
       const token = localStorage.getItem("token");
       await axios.put(
-        `http://localhost:5000/api/checker/questions/${id}/approve`,
+        `${host}/api/checker/questions/${id}/approve`,
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -81,7 +79,7 @@ export default function CheckerReview() {
     try {
       const token = localStorage.getItem("token");
       await axios.put(
-        `http://localhost:5000/api/checker/questions/${id}/reject`,
+        `${host}/api/checker/questions/${id}/reject`,
         { comments: comments[id] },
         { headers: { Authorization: `Bearer ${token}` } }
       );

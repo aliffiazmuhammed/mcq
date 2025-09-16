@@ -9,7 +9,6 @@ export default function CheckerSidebar() {
 
   // Sidebar menu items (Checker-specific)
   const menuItems = [
-    { name: "Dashboard", path: "/checker/dashboard", icon: "📊" },
     { name: "Review Questions", path: "/checker/review", icon: "📝" },
     { name: "Accepted Questions", path: "/checker/accepted", icon: "✅" },
   ];
