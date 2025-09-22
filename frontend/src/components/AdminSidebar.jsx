@@ -2,7 +2,7 @@ import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useState } from "react";
 import { HiMenu, HiX } from "react-icons/hi";
-import { FiUpload, FiUserPlus } from "react-icons/fi"; // Import new icons
+import { FiUpload, FiUserPlus , FiUser } from "react-icons/fi"; // Import new icons
 
 export default function AdminSidebar() {
   const { user, logout } = useAuth();
@@ -20,6 +20,11 @@ export default function AdminSidebar() {
       name: "Create User",
       path: "/admin/create-user",
       icon: <FiUserPlus size={20} />,
+    },
+    {
+      name: "Show Users",
+      path: "/admin/show-users",
+      icon: <FiUser size={20} />,
     },
   ];
 
