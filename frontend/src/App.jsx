@@ -6,8 +6,7 @@ import {
   Navigate,
 } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
-import Login from "./pages/Login";
-import DashBoard from "./pages/DashBoard";
+import AdminLogin from "./pages/login/AdminLogin";
 import AdminPage from "./pages/AdminPage";
 import MakerPage from "./pages/MakerPage";
 import CheckerPage from "./pages/CheckerPage";
@@ -19,6 +18,8 @@ import CheckerReview from "./pages/checker/CheckerReview";
 import AcceptedQuestions from "./pages/checker/AcceptedQuestions";
 import CheckerLogin from "./pages/login/CheckerLogin";
 import MakerLogin from "./pages/login/MakerLogin";
+import PdfUploadPage from "./pages/admin/PdfUploadPage";
+import CreateUserPage from "./pages/admin/CreateUserPage";
 
 function PrivateRoute({ children, role }) {
   const { user, loading } = useAuth();
@@ -32,14 +33,12 @@ function PrivateRoute({ children, role }) {
     );
   }
 
-
-
   // Check role (safely, since user is guaranteed now)
   if (role && user.role !== role) {
     if (user.role === "maker")
-      return <Navigate to="/maker/dashboard" replace />;
+      return <Navigate to="/maker/create" replace />;
     if (user.role === "checker")
-      return <Navigate to="/checker/dashboard" replace />;
+      return <Navigate to="/checker/review" replace />;
     if (user.role === "admin") return <Navigate to="/admin" replace />;
     return <Navigate to="/dashboard" replace />;
   }
@@ -55,12 +54,12 @@ export default function App() {
       <Router>
         <Routes>
           {/* Public */}
-          <Route path="/login" element={<Login />} />
+          <Route path="/login/admin" element={<AdminLogin />} />
           <Route path="/login/maker" element={<MakerLogin />} />
           <Route path="/login/checker" element={<CheckerLogin />} />
 
           {/* Protected */}
-          
+
           <Route
             path="/admin"
             element={
@@ -68,7 +67,10 @@ export default function App() {
                 <AdminPage />
               </PrivateRoute>
             }
-          />
+          >
+            <Route path="pdf-upload" element={<PdfUploadPage />} />
+            <Route path="create-user" element={<CreateUserPage />} />
+          </Route>
           <Route
             path="/maker"
             element={
@@ -77,7 +79,6 @@ export default function App() {
               </PrivateRoute>
             }
           >
-            <Route path="dashboard" element={<h1>Maker Dashboard</h1>} />
             <Route path="create" element={<CreateQuestion />} />
             <Route path="create/:id" element={<CreateQuestion />} />
             <Route path="drafts" element={<DraftQuestions />} />
@@ -92,7 +93,6 @@ export default function App() {
               </PrivateRoute>
             }
           >
-            <Route path="dashboard" element={<h1>dash</h1>} />
             <Route path="review" element={<CheckerReview />} />
             <Route path="accepted" element={<AcceptedQuestions />} />
           </Route>

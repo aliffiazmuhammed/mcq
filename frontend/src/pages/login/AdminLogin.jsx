@@ -1,33 +1,30 @@
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../../context/AuthContext";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-export default function Login() {
+export default function AdminLogin() {
   const { login, user, loading } = useAuth();
   const navigate = useNavigate();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  const handleLogin = async () => {
-    if (!email || !password) {
-      alert("Please enter both email and password");
-      return;
-    }
+ const handleLogin = async () => {
+   if (!email || !password) return alert("Enter email & password");
 
-    const res = await login(email, password);
-    if (!res.success) {
-      alert(res.message);
-    }
-  };
+   const res = await login(email, password, "admin");
+   if (!res.success) return alert(res.message);
+   navigate("/checker");
+ };
 
-  // Auto redirect after login based on role
+  // Auto redirect only if role is admin
   useEffect(() => {
     if (user) {
-      if (user.role === "admin") navigate("/admin");
-      else if (user.role === "maker") navigate("/maker");
-      else if (user.role === "checker") navigate("/checker");
-      else navigate("/dashboard");
+      if (user.role === "admin") {
+        navigate("/admin");
+      } else {
+        alert("Access denied! Only admins can log in here.");
+      }
     }
   }, [user, navigate]);
 
@@ -36,10 +33,10 @@ export default function Login() {
       <div className="bg-white w-full max-w-md rounded-2xl shadow-lg p-8 sm:p-10">
         {/* Branding */}
         <div className="text-center mb-6">
-          <h1 className="text-3xl font-extrabold text-gray-800">
-            Exam Prep Portal
-          </h1>
-          <p className="text-gray-500 mt-2">Sign in to continue</p>
+          <h1 className="text-3xl font-extrabold text-gray-800">Admin Login</h1>
+          <p className="text-gray-500 mt-2">
+            Sign in with your admin credentials
+          </p>
         </div>
 
         {/* Loading Spinner */}
@@ -53,7 +50,7 @@ export default function Login() {
             <div className="flex flex-col gap-4 mb-6">
               <input
                 type="email"
-                placeholder="Email"
+                placeholder="Admin Email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -72,7 +69,7 @@ export default function Login() {
               onClick={handleLogin}
               className="w-full py-3 rounded-lg bg-blue-600 text-white font-semibold shadow-md hover:bg-blue-700 transition"
             >
-              Login
+              Login as Admin
             </button>
           </>
         )}

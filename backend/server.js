@@ -5,6 +5,7 @@ import connectDB from './src/config/db.js';
 import authRoutes from './src/routes/authRoutes.js';
 import questionRoutes from './src/routes/questionRoutes.js';
 import checkerRoutes from './src/routes/checkerRoutes.js';
+import adminRoutes from './src/routes/adminRoutes.js'
 
 // Load environment variables
 dotenv.config();
@@ -17,6 +18,7 @@ app.use(cors());
 app.use(express.json());
 
 // Routes
+app.use("/api/admin",adminRoutes)
 app.use("/api/auth", authRoutes);
 app.use("/api/questions", questionRoutes);
 app.use("/api/checker", checkerRoutes);

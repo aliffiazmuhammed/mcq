@@ -36,7 +36,7 @@ export const AuthProvider = ({ children }) => {
       let endpoint = `${host}/api/auth/login`;
       if (roleType === "maker") endpoint += "/maker";
       else if (roleType === "checker") endpoint += "/checker";
-      else endpoint += "/user";
+      else endpoint += "/admin";
 
       const res = await axios.post(endpoint, { email, password });
 
@@ -71,7 +71,7 @@ export const AuthProvider = ({ children }) => {
 
     if (role === "maker") navigate("/login/maker");
     else if (role === "checker") navigate("/login/checker");
-    else navigate("/login");
+    else navigate("/login/admin");
   };
 
   return (

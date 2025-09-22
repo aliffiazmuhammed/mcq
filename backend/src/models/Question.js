@@ -44,7 +44,7 @@ const questionSchema = new mongoose.Schema(
         },
         maker: {
             type: mongoose.Schema.Types.ObjectId,
-            ref: "User",
+            ref: "Maker",
             required: true,
         },
         status: {
@@ -57,7 +57,7 @@ const questionSchema = new mongoose.Schema(
         },
         checkedBy: {
             type: mongoose.Schema.Types.ObjectId,
-            ref: "User",
+            ref: "Checker",
         },
     },
     { timestamps: true }

@@ -1,17 +1,15 @@
 import mongoose from "mongoose";
-import { ROLES } from "../constants/roles.js";
 
-const userSchema = new mongoose.Schema(
+const adminSchema = new mongoose.Schema(
     {
         name: { type: String, required: [true, "Name is required"] },
         email: { type: String, required: [true, "Email is required"], unique: true },
         password: { type: String, required: [true, "Password is required"] },
-        role: { type: String, enum: Object.values(ROLES), default: ROLES.MAKER },
     },
     { timestamps: true }
 );
 
+const Admin = mongoose.model("Admin", adminSchema);
 
-const User = mongoose.model("User", userSchema);
+export default Admin;
 
-export default User;

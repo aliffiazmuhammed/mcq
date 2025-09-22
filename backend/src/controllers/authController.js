@@ -1,8 +1,9 @@
 import bcrypt from "bcryptjs";
 import { generateToken } from "../utils/jwt.js";
-import User from "../models/User.js";
+
 import Maker from "../models/Maker.js";
 import Checker from "../models/Checker.js";
+import Admin from "../models/Admin.js"; // ✅ import admin model
 
 // Generic login handler
 const handleLogin = async (Model, type, req, res) => {
@@ -22,7 +23,7 @@ const handleLogin = async (Model, type, req, res) => {
         const token = generateToken({
             id: user._id,
             email: user.email,
-            type : type, // "user" | "maker" | "checker"
+            type: type, // "maker" | "checker" | "admin"
         });
 
         return res.json({
@@ -31,7 +32,7 @@ const handleLogin = async (Model, type, req, res) => {
             user: {
                 id: user._id,
                 email: user.email,
-                type : type,
+                type: type,
             },
         });
     } catch (err) {
@@ -41,8 +42,8 @@ const handleLogin = async (Model, type, req, res) => {
 };
 
 // Separate login controllers
-const loginUser = (req, res) => handleLogin(User, "user", req, res);
 const loginMaker = (req, res) => handleLogin(Maker, "maker", req, res);
 const loginChecker = (req, res) => handleLogin(Checker, "checker", req, res);
+const loginAdmin = (req, res) => handleLogin(Admin, "admin", req, res); // ✅ added admin login
 
-export { loginUser, loginMaker, loginChecker };
+export { loginMaker, loginChecker, loginAdmin };

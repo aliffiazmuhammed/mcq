@@ -1,24 +1,24 @@
 import { verifyToken } from "../utils/jwt.js";
-import User from "../models/User.js";
 import Maker from "../models/Maker.js";
 import Checker from "../models/Checker.js";
+import Admin from "../models/Admin.js"; // ✅ import admin model
 
 // Protect routes
 const protect = async (req, res, next) => {
     let token;
-
     if (req.headers.authorization && req.headers.authorization.startsWith("Bearer")) {
         try {
             token = req.headers.authorization.split(" ")[1];
             const decoded = verifyToken(token);
 
             let currentUser = null;
-            if (decoded.type === "user") {
-                currentUser = await User.findById(decoded.id).select("-password");
-            } else if (decoded.type === "maker") {
+
+            if (decoded.type === "maker") {
                 currentUser = await Maker.findById(decoded.id).select("-password");
             } else if (decoded.type === "checker") {
                 currentUser = await Checker.findById(decoded.id).select("-password");
+            } else if (decoded.type === "admin") {   
+                currentUser = await Admin.findById(decoded.id).select("-password");
             }
 
             if (!currentUser) {
@@ -36,7 +36,7 @@ const protect = async (req, res, next) => {
     return res.status(401).json({ message: "Not authorized, no token" });
 };
 
-// Restrict to specific types
+// Restrict to specific roles
 const authorize = (...allowedTypes) => {
     return (req, res, next) => {
         if (!allowedTypes.includes(req.userType)) {
