@@ -10,23 +10,23 @@ const AuthContext = createContext();
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null); // { email, role }
   const [token, setToken] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true); // start as true
 
   // Check auth from localStorage when app loads
- useEffect(() => {
-   const storedToken = localStorage.getItem("token");
-   if (storedToken) {
-     try {
-       const decoded = jwtDecode(storedToken);
-       setUser({ email: decoded.email, role: decoded.role || decoded.type });
-       setToken(storedToken);
-     } catch (err) {
-       console.error("Invalid token", err);
-       localStorage.removeItem("token");
-     }
-   }
-   setLoading(false); // done checking
- }, []);
+  useEffect(() => {
+    const storedToken = localStorage.getItem("token");
+    if (storedToken) {
+      try {
+        const decoded = jwtDecode(storedToken);
+        setUser({ email: decoded.email, role: decoded.role || decoded.type });
+        setToken(storedToken);
+      } catch (err) {
+        console.error("Invalid token", err);
+        localStorage.removeItem("token");
+      }
+    }
+    setLoading(false); // done checking
+  }, []);
 
   // Login function
   const login = async (email, password, roleType) => {
@@ -45,6 +45,10 @@ export const AuthProvider = ({ children }) => {
         setToken(res.data.token);
 
         const decoded = jwtDecode(res.data.token);
+
+        // store role in localStorage
+        localStorage.setItem("role", decoded.type);
+
         setUser({ email: decoded.email, role: decoded.type });
         return { success: true, role: decoded.type };
       }
@@ -59,17 +63,16 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const logout = (navigate) => {
+    const role = user?.role;
+    localStorage.removeItem("token");
+    setUser(null);
+    setToken(null);
 
-const logout = (navigate) => {
-  const role = user?.role;
-  localStorage.removeItem("token");
-  setUser(null);
-  setToken(null);
-
-  if (role === "maker") navigate("/login/maker");
-  else if (role === "checker") navigate("/login/checker");
-  else navigate("/login");
-};
+    if (role === "maker") navigate("/login/maker");
+    else if (role === "checker") navigate("/login/checker");
+    else navigate("/login");
+  };
 
   return (
     <AuthContext.Provider value={{ user, token, login, logout, loading }}>

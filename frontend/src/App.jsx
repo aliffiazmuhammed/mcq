@@ -23,7 +23,7 @@ import MakerLogin from "./pages/login/MakerLogin";
 function PrivateRoute({ children, role }) {
   const { user, loading } = useAuth();
 
-  // Show loader only while checking auth
+  // Show loader while checking auth
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -32,15 +32,9 @@ function PrivateRoute({ children, role }) {
     );
   }
 
-  // If user is not logged in
-  if (!user) {
-    // If a specific redirect path is provided (like after logout)
-    if (redirectPath) return <Navigate to={redirectPath} replace />;
 
-    // Default login page
-    return <Navigate to="/login" replace />;
-  }
-  // Check role
+
+  // Check role (safely, since user is guaranteed now)
   if (role && user.role !== role) {
     if (user.role === "maker")
       return <Navigate to="/maker/dashboard" replace />;
@@ -52,6 +46,7 @@ function PrivateRoute({ children, role }) {
 
   return children;
 }
+
 
 
 export default function App() {
