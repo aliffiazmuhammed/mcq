@@ -1,4 +1,4 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useState } from "react";
 import { HiMenu, HiX } from "react-icons/hi";
@@ -13,7 +13,7 @@ export default function Sidebar() {
     { name: "Draft Questions", path: "/maker/drafts", icon: "📝" },
     { name: "Submitted Questions", path: "/maker/submitted", icon: "📤" },
   ];
-
+const navigate = useNavigate();
   return (
     <>
       {/* Mobile Toggle Button (top-left) */}
@@ -62,7 +62,7 @@ export default function Sidebar() {
         {/* Logout */}
         <div className="p-4 border-t">
           <button
-            onClick={logout}
+            onClick={() => logout(navigate)}
             className="w-full bg-red-500 text-white py-2 rounded-lg hover:bg-red-600 transition"
           >
             Logout

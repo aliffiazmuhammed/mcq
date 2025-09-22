@@ -1,4 +1,4 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useState } from "react";
 import { HiMenu, HiX } from "react-icons/hi";
@@ -6,6 +6,7 @@ import { HiMenu, HiX } from "react-icons/hi";
 export default function CheckerSidebar() {
   const { user, logout } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
+const navigate = useNavigate();
 
   // Sidebar menu items (Checker-specific)
   const menuItems = [
@@ -61,7 +62,7 @@ export default function CheckerSidebar() {
         {/* Logout */}
         <div className="p-4 border-t">
           <button
-            onClick={logout}
+            onClick={() => logout(navigate)}
             className="w-full bg-red-500 text-white py-2 rounded-lg hover:bg-red-600 transition"
           >
             Logout

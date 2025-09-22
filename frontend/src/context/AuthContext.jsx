@@ -3,6 +3,8 @@ import axios from "axios";
 import { jwtDecode } from "jwt-decode";
 import { host } from "../utils/APIRoutes";
 
+
+
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
@@ -11,38 +13,40 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(false);
 
   // Check auth from localStorage when app loads
-  useEffect(() => {
-    const storedToken = localStorage.getItem("token");
-    if (storedToken) {
-      try {
-        const decoded = jwtDecode(storedToken);
-        setUser({ email: decoded.email, role: decoded.role });
-        setToken(storedToken);
-      } catch (err) {
-        console.error("Invalid token", err);
-        localStorage.removeItem("token");
-      }
-    }
-  }, []);
+ useEffect(() => {
+   const storedToken = localStorage.getItem("token");
+   if (storedToken) {
+     try {
+       const decoded = jwtDecode(storedToken);
+       setUser({ email: decoded.email, role: decoded.role || decoded.type });
+       setToken(storedToken);
+     } catch (err) {
+       console.error("Invalid token", err);
+       localStorage.removeItem("token");
+     }
+   }
+   setLoading(false); // done checking
+ }, []);
 
   // Login function
-  const login = async (email, password) => {
-    console.log(email, "+" , password)
+  const login = async (email, password, roleType) => {
+    // roleType = "user" | "maker" | "checker"
     setLoading(true);
     try {
-      const res = await axios.post(`${host}/api/auth/login`, {
-        email,
-        password,
-      });
-      console.log(res.data)
+      let endpoint = `${host}/api/auth/login`;
+      if (roleType === "maker") endpoint += "/maker";
+      else if (roleType === "checker") endpoint += "/checker";
+      else endpoint += "/user";
+
+      const res = await axios.post(endpoint, { email, password });
 
       if (res.data.token) {
         localStorage.setItem("token", res.data.token);
         setToken(res.data.token);
 
         const decoded = jwtDecode(res.data.token);
-        setUser({ email: decoded.email, role: decoded.role });
-        return { success: true, role: decoded.role };
+        setUser({ email: decoded.email, role: decoded.type });
+        return { success: true, role: decoded.type };
       }
     } catch (err) {
       console.error("Login failed", err.response?.data || err.message);
@@ -55,12 +59,17 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Logout function
-  const logout = () => {
-    localStorage.removeItem("token");
-    setUser(null);
-    setToken(null);
-  };
+
+const logout = (navigate) => {
+  const role = user?.role;
+  localStorage.removeItem("token");
+  setUser(null);
+  setToken(null);
+
+  if (role === "maker") navigate("/login/maker");
+  else if (role === "checker") navigate("/login/checker");
+  else navigate("/login");
+};
 
   return (
     <AuthContext.Provider value={{ user, token, login, logout, loading }}>

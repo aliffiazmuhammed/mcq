@@ -22,7 +22,7 @@ const handleLogin = async (Model, type, req, res) => {
         const token = generateToken({
             id: user._id,
             email: user.email,
-            type, // "user" | "maker" | "checker"
+            type : type, // "user" | "maker" | "checker"
         });
 
         return res.json({
@@ -31,7 +31,7 @@ const handleLogin = async (Model, type, req, res) => {
             user: {
                 id: user._id,
                 email: user.email,
-                type,
+                type : type,
             },
         });
     } catch (err) {

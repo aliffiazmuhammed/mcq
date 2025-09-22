@@ -1,40 +1,37 @@
-const mongoose = require("mongoose");
-const bcrypt = require("bcryptjs");
-const User = require("./src/models/User");
-const { ROLES } = require("./src/constants/roles");
-const dotenv = require("dotenv");
+import mongoose from "mongoose";
+import bcrypt from "bcryptjs";
+import dotenv from "dotenv";
+
+// Import separate models
+import Maker from "./src/models/Maker.js";    // maker user
+import Checker from "./src/models/Checker.js"; // checker user
 
 dotenv.config();
 
 async function seedUsers() {
     try {
         await mongoose.connect(process.env.MONGO_URI);
-
         console.log("✅ Connected to MongoDB");
 
-        // Clear existing users (optional, for clean seeding)
-        await User.deleteMany();
+        await Maker.deleteMany();
+        await Checker.deleteMany();
 
         const hashedPassword = await bcrypt.hash("password123", 10);
 
-        const users = [
-            {
-                name: "Maker User",
-                email: "maker@example.com",
-                password: hashedPassword,
-                role: ROLES.MAKER,
-            },
-            {
-                name: "Checker User",
-                email: "checker@example.com",
-                password: hashedPassword,
-                role: ROLES.CHECKER,
-            },
+        // Seed Makers
+        const makers = [
+            { name: "Maker User", email: "maker@example.com", password: hashedPassword },
         ];
+        await Maker.insertMany(makers);
 
-        await User.insertMany(users);
+        // Seed Checkers
+        const checkers = [
+            { name: "Checker User", email: "checker@example.com", password: hashedPassword },
+        ];
+        await Checker.insertMany(checkers);
 
         console.log("✅ Users seeded successfully");
+        console.log("👉 Normal user login: user@example.com / password123");
         console.log("👉 Maker login: maker@example.com / password123");
         console.log("👉 Checker login: checker@example.com / password123");
 

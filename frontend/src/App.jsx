@@ -17,30 +17,42 @@ import DraftQuestions from "./pages/maker/DraftQuestions";
 import SubmittedQuestions from "./pages/maker/SubmittedQuestions";
 import CheckerReview from "./pages/checker/CheckerReview";
 import AcceptedQuestions from "./pages/checker/AcceptedQuestions";
+import CheckerLogin from "./pages/login/CheckerLogin";
+import MakerLogin from "./pages/login/MakerLogin";
 
 function PrivateRoute({ children, role }) {
   const { user, loading } = useAuth();
 
-  // Show loader while checking auth (useful if later you add API auth)
-  if (loading)
+  // Show loader only while checking auth
+  if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
         Loading...
       </div>
     );
-
-  // If not logged in → redirect
-  if (!user) {
-    return <Navigate to="/login" replace />;
   }
 
-  // If role is provided → check it
+  // If user is not logged in
+  if (!user) {
+    // If a specific redirect path is provided (like after logout)
+    if (redirectPath) return <Navigate to={redirectPath} replace />;
+
+    // Default login page
+    return <Navigate to="/login" replace />;
+  }
+  // Check role
   if (role && user.role !== role) {
+    if (user.role === "maker")
+      return <Navigate to="/maker/dashboard" replace />;
+    if (user.role === "checker")
+      return <Navigate to="/checker/dashboard" replace />;
+    if (user.role === "admin") return <Navigate to="/admin" replace />;
     return <Navigate to="/dashboard" replace />;
   }
 
   return children;
 }
+
 
 export default function App() {
   return (
@@ -49,16 +61,11 @@ export default function App() {
         <Routes>
           {/* Public */}
           <Route path="/login" element={<Login />} />
+          <Route path="/login/maker" element={<MakerLogin />} />
+          <Route path="/login/checker" element={<CheckerLogin />} />
 
           {/* Protected */}
-          <Route
-            path="/dashboard"
-            element={
-              <PrivateRoute>
-                <DashBoard />
-              </PrivateRoute>
-            }
-          />
+          
           <Route
             path="/admin"
             element={
