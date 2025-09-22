@@ -12,7 +12,7 @@ const QUESTION_STATUS = {
     REJECTED: "Rejected",
 };
 
-module.exports = {
+export {
     ROLES,
-    QUESTION_STATUS,
+    QUESTION_STATUS
 };

@@ -1,11 +1,11 @@
-const User = require("../models/User");
-const bcrypt = require("bcryptjs");
-const { generateToken } = require("../utils/jwt");
+import User from "../models/User.js";
+import bcrypt from "bcryptjs";
+import { generateToken } from "../utils/jwt.js";
 
 
 const login = async (req, res) => {
     const { email, password } = req.body;
-    console.log(email , "=" , password)
+    console.log(email, "=", password);
 
     try {
         // Check if user exists
@@ -42,4 +42,4 @@ const login = async (req, res) => {
     }
 };
 
-module.exports = { login };
+export { login };

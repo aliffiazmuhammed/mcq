@@ -1,5 +1,5 @@
-const { verifyToken } = require("../utils/jwt");
-const User = require("../models/User");
+import { verifyToken } from "../utils/jwt.js";
+import User from "../models/User.js";
 
 // Protect routes (must be logged in)
 const protect = async (req, res, next) => {
@@ -19,6 +19,7 @@ const protect = async (req, res, next) => {
 
     return res.status(401).json({ message: "Not authorized, no token" });
 };
+
 // Restrict routes to specific roles
 const authorize = (...roles) => {
     return (req, res, next) => {
@@ -29,4 +30,4 @@ const authorize = (...roles) => {
     };
 };
 
-module.exports = { protect, authorize };
+export { protect, authorize };

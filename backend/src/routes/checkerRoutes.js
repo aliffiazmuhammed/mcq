@@ -1,10 +1,10 @@
-const express = require("express");
-const {
+import express from "express";
+import {
     getPendingQuestions,
     approveQuestion,
     rejectQuestion,
     getReviewedQuestions,
-} = require("../controllers/checkerController");
+} from "../controllers/checkerController.js";
 
 const router = express.Router();
 
@@ -13,4 +13,4 @@ router.put("/questions/:id/approve", approveQuestion);
 router.put("/questions/:id/reject", rejectQuestion);
 router.get("/questions/reviewed", getReviewedQuestions);
 
-module.exports = router;
+export default router;

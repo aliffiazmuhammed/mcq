@@ -1,10 +1,10 @@
-const Question = require("../models/Question");
-const { QUESTION_STATUS } = require("../constants/roles");
+import Question from "../models/Question.js";
+import { QUESTION_STATUS } from "../constants/roles.js";
 
 const createOrUpdateQuestion = async (req, res) => {
     try {
         const {
-            _id, 
+            _id,
             course,
             grade,
             subject,
@@ -94,18 +94,18 @@ const getQuestionById = async (req, res) => {
     }
 };
 
-
 const getDraftQuestions = async (req, res) => {
     try {
         const drafts = await Question.find({
-            maker: req.user._id,           
-            status: QUESTION_STATUS.DRAFT,    
-        }).sort({ createdAt: -1 });         
+            maker: req.user._id,
+            status: QUESTION_STATUS.DRAFT,
+        }).sort({ createdAt: -1 });
         res.status(200).json(drafts);
     } catch (err) {
         res.status(500).json({ message: "Error fetching drafts", error: err.message });
     }
 };
+
 const deleteQuestions = async (req, res) => {
     try {
         const { ids } = req.body;
@@ -181,6 +181,4 @@ const getSubmittedQuestions = async (req, res) => {
     }
 };
 
-
-
-module.exports = { createOrUpdateQuestion, getQuestionById , getDraftQuestions, deleteQuestions, submitQuestionsForApproval ,getSubmittedQuestions};
+export { createOrUpdateQuestion, getQuestionById, getDraftQuestions, deleteQuestions, submitQuestionsForApproval, getSubmittedQuestions };

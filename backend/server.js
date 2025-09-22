@@ -1,12 +1,15 @@
-const express = require("express");
-const dotenv = require("dotenv");
-const cors = require("cors");
-const connectDB = require("./src/config/db");
-const authRoutes = require("./src/routes/authRoutes.js");
-const questionRoutes =  require ("./src/routes/questionRoutes.js");
-const checkerRoutes = require("./src/routes/checkerRoutes.js");
+import express from 'express';
+import dotenv from 'dotenv';
+import cors from 'cors';
+import connectDB from './src/config/db.js';
+import authRoutes from './src/routes/authRoutes.js';
+import questionRoutes from './src/routes/questionRoutes.js';
+import checkerRoutes from './src/routes/checkerRoutes.js';
 
+// Load environment variables
 dotenv.config();
+
+// Connect to the database
 connectDB();
 
 const app = express();

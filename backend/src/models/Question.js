@@ -1,5 +1,5 @@
-const mongoose = require("mongoose");
-const { QUESTION_STATUS } = require("../constants/roles");
+import mongoose from "mongoose";
+import { QUESTION_STATUS } from "../constants/roles.js";
 
 // Question Schema
 const questionSchema = new mongoose.Schema(
@@ -65,4 +65,4 @@ const questionSchema = new mongoose.Schema(
 
 const Question = mongoose.model("Question", questionSchema);
 
-module.exports = Question;
+export default Question;

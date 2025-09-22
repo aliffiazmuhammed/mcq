@@ -1,4 +1,4 @@
-const Question = require("../models/Question");
+import Question from "../models/Question.js";
 
 // Fetch all pending questions for checker
 const getPendingQuestions = async (req, res) => {
@@ -38,7 +38,7 @@ const rejectQuestion = async (req, res) => {
 
         const question = await Question.findByIdAndUpdate(
             id,
-            { status: "Rejected", checkerComments:comments },
+            { status: "Rejected", checkerComments: comments },
             { new: true }
         );
 
@@ -64,7 +64,7 @@ const getReviewedQuestions = async (req, res) => {
     }
 };
 
-module.exports = {
+export {
     getPendingQuestions,
     approveQuestion,
     rejectQuestion,
