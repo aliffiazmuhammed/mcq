@@ -1,45 +1,48 @@
-import User from "../models/User.js";
 import bcrypt from "bcryptjs";
 import { generateToken } from "../utils/jwt.js";
+import User from "../models/User.js";
+import Maker from "../models/Maker.js";
+import Checker from "../models/Checker.js";
 
-
-const login = async (req, res) => {
+// Generic login handler
+const handleLogin = async (Model, type, req, res) => {
     const { email, password } = req.body;
-    console.log(email, "=", password);
 
     try {
-        // Check if user exists
-        const user = await User.findOne({ email });
+        const user = await Model.findOne({ email }).select("+password");
         if (!user) {
             return res.status(400).json({ message: "Invalid email or password" });
         }
 
-        // Compare password
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
             return res.status(400).json({ message: "Invalid email or password" });
         }
 
-        // Generate JWT
         const token = generateToken({
             id: user._id,
             email: user.email,
-            role: user.role,
+            type, // "user" | "maker" | "checker"
         });
 
-        res.json({
-            message: "Login successful",
+        return res.json({
+            message: `${type} login successful`,
             token,
             user: {
                 id: user._id,
                 email: user.email,
-                role: user.role,
+                type,
             },
         });
     } catch (err) {
-        console.error("Login error:", err.message);
+        console.error(`${type} login error:`, err.message);
         res.status(500).json({ message: "Server error" });
     }
 };
 
-export { login };
+// Separate login controllers
+const loginUser = (req, res) => handleLogin(User, "user", req, res);
+const loginMaker = (req, res) => handleLogin(Maker, "maker", req, res);
+const loginChecker = (req, res) => handleLogin(Checker, "checker", req, res);
+
+export { loginUser, loginMaker, loginChecker };
