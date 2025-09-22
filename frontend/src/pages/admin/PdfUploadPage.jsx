@@ -1,51 +1,80 @@
 import React, { useState } from "react";
-import { HiOutlineDocument } from "react-icons/hi";
+import { HiOutlineDocument, HiX } from "react-icons/hi";
 
 export default function PdfUploadPage() {
-  const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedFiles, setSelectedFiles] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file && file.type === "application/pdf") {
-      setSelectedFile(file);
-    } else {
-      setSelectedFile(null);
-      alert("Please select a valid PDF file.");
+  // Handle file selection, adding new files to the existing list
+const handleFileChange = (e) => {
+  const newFiles = Array.from(e.target.files);
+  const validPdfs = newFiles.filter((file) => file.type === "application/pdf");
+
+  if (validPdfs.length > 0) {
+    setSelectedFiles((prevFiles) => {
+      // Create a set of existing file names for efficient lookup
+      const existingFileNames = new Set(prevFiles.map((file) => file.name));
+
+      // Filter out files that already exist in the list
+      const uniqueNewFiles = validPdfs.filter(
+        (file) => !existingFileNames.has(file.name)
+      );
+
+      // Alert the user if any duplicate files were ignored
+      if (uniqueNewFiles.length < validPdfs.length) {
+        alert("Some duplicate files were not added.");
+      }
+
+      return [...prevFiles, ...uniqueNewFiles];
+    });
+  } else {
+    // Only alert if the user selected invalid files
+    if (newFiles.length > 0) {
+      alert("Only PDF files are allowed. Invalid files were not added.");
     }
+  }
+  // Clear the input value to allow the same file(s) to be selected again
+  e.target.value = null;
+};
+
+  // Remove a specific file from the list
+  const removeFile = (fileToRemove) => {
+    setSelectedFiles(selectedFiles.filter((file) => file !== fileToRemove));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!selectedFile) {
-      alert("Please select a file to upload.");
+    if (selectedFiles.length === 0) {
+      alert("Please select files to upload.");
       return;
     }
 
     setLoading(true);
 
     const formData = new FormData();
-    formData.append("pdfFile", selectedFile);
+    selectedFiles.forEach((file, index) => {
+      formData.append(`pdfFile${index}`, file);
+    });
 
     try {
-      // Replace with your actual API endpoint for PDF upload
-      // const response = await fetch("/api/upload-pdf", {
+      // API call to handle bulk upload
+      // const response = await fetch("/api/bulk-upload-pdf", {
       //   method: "POST",
       //   body: formData,
       // });
 
-      // const result = await response.json();
-      // console.log("Upload success:", result);
-
       // Simulate API call for demonstration
       await new Promise((resolve) => setTimeout(resolve, 2000));
-      console.log("PDF uploaded successfully:", selectedFile.name);
+      console.log(
+        "PDFs uploaded successfully:",
+        selectedFiles.map((file) => file.name)
+      );
 
-      alert("PDF uploaded successfully!");
-      setSelectedFile(null);
+      alert(`${selectedFiles.length} file(s) uploaded successfully!`);
+      setSelectedFiles([]);
     } catch (error) {
       console.error("Upload failed:", error);
-      alert("PDF upload failed.");
+      alert("File upload failed.");
     } finally {
       setLoading(false);
     }
@@ -53,7 +82,7 @@ export default function PdfUploadPage() {
 
   return (
     <div className="max-w-5xl mx-auto p-6 bg-white rounded-lg shadow-md relative">
-      <h1 className="text-2xl font-bold mb-6">Upload PDF Document</h1>
+      <h1 className="text-2xl font-bold mb-6">Upload PDF Documents</h1>
 
       {loading && (
         <div className="absolute inset-0 bg-white bg-opacity-70 flex justify-center items-center z-50">
@@ -68,12 +97,13 @@ export default function PdfUploadPage() {
             htmlFor="pdf-upload"
             className="block text-sm font-medium text-gray-700 mb-2"
           >
-            Select PDF File
+            Select PDF File(s)
           </label>
           <input
             id="pdf-upload"
             type="file"
             accept=".pdf"
+            multiple // This attribute enables bulk selection
             onChange={handleFileChange}
             className="block w-full text-sm text-gray-500
               file:mr-4 file:py-2 file:px-4
@@ -84,16 +114,33 @@ export default function PdfUploadPage() {
           />
         </div>
 
-        {/* Selected File Display */}
-        {selectedFile && (
-          <div className="flex items-center space-x-4 p-4 border border-gray-300 rounded-lg bg-gray-50">
-            <HiOutlineDocument size={24} className="text-indigo-500" />
-            <span className="flex-1 text-sm font-medium text-gray-700 truncate">
-              {selectedFile.name}
-            </span>
-            <span className="text-xs text-gray-500">
-              {(selectedFile.size / 1024).toFixed(2)} KB
-            </span>
+        {/* Selected Files Display */}
+        {selectedFiles.length > 0 && (
+          <div className="space-y-2">
+            <h2 className="text-lg font-semibold text-gray-800">
+              Selected Files ({selectedFiles.length})
+            </h2>
+            {selectedFiles.map((file, index) => (
+              <div
+                key={index}
+                className="flex items-center space-x-4 p-3 border border-gray-300 rounded-lg bg-gray-50"
+              >
+                <HiOutlineDocument size={20} className="text-indigo-500" />
+                <span className="flex-1 text-sm font-medium text-gray-700 truncate">
+                  {file.name}
+                </span>
+                <span className="text-xs text-gray-500">
+                  {(file.size / 1024).toFixed(2)} KB
+                </span>
+                <button
+                  type="button"
+                  onClick={() => removeFile(file)}
+                  className="text-gray-400 hover:text-gray-600 transition"
+                >
+                  <HiX size={16} />
+                </button>
+              </div>
+            ))}
           </div>
         )}
 
@@ -101,15 +148,15 @@ export default function PdfUploadPage() {
         <div>
           <button
             type="submit"
-            disabled={!selectedFile || loading}
+            disabled={selectedFiles.length === 0 || loading}
             className={`w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white
               ${
-                selectedFile && !loading
+                selectedFiles.length > 0 && !loading
                   ? "bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                   : "bg-indigo-400 cursor-not-allowed"
               }`}
           >
-            Upload PDF
+            {loading ? "Uploading..." : "Upload PDF(s)"}
           </button>
         </div>
       </form>
