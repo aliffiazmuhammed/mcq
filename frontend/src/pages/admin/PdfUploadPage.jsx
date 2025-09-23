@@ -1,10 +1,10 @@
 import React, { useState } from "react";
 import { HiOutlineDocument, HiX } from "react-icons/hi";
-
+import { host } from "../../utils/APIRoutes";
 export default function PdfUploadPage() {
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [loading, setLoading] = useState(false);
-
+const token = localStorage.getItem("token");
   // Handle file selection, adding new files to the existing list
 const handleFileChange = (e) => {
   const newFiles = Array.from(e.target.files);
@@ -42,43 +42,40 @@ const handleFileChange = (e) => {
     setSelectedFiles(selectedFiles.filter((file) => file !== fileToRemove));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (selectedFiles.length === 0) {
-      alert("Please select files to upload.");
-      return;
-    }
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  if (selectedFiles.length === 0) return alert("Please select files!");
 
-    setLoading(true);
+  setLoading(true);
 
-    const formData = new FormData();
-    selectedFiles.forEach((file, index) => {
-      formData.append(`pdfFile${index}`, file);
+  const formData = new FormData();
+  selectedFiles.forEach((file) => formData.append("pdfFiles", file)); // name matches backend
+
+  try {
+    const res = await fetch(`${host}/api/admin/pdfs`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`, 
+      },
+      body: formData,
     });
 
-    try {
-      // API call to handle bulk upload
-      // const response = await fetch("/api/bulk-upload-pdf", {
-      //   method: "POST",
-      //   body: formData,
-      // });
+    const data = await res.json();
 
-      // Simulate API call for demonstration
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      console.log(
-        "PDFs uploaded successfully:",
-        selectedFiles.map((file) => file.name)
-      );
-
-      alert(`${selectedFiles.length} file(s) uploaded successfully!`);
+    if (data.success) {
+      console.log("Uploaded files:", data.files);
+      alert("Upload successful!");
       setSelectedFiles([]);
-    } catch (error) {
-      console.error("Upload failed:", error);
-      alert("File upload failed.");
-    } finally {
-      setLoading(false);
+    } else {
+      alert("Upload failed: " + data.error);
     }
-  };
+  } catch (err) {
+    console.error(err);
+    alert("Upload failed");
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div className="max-w-5xl mx-auto p-6 bg-white rounded-lg shadow-md relative">

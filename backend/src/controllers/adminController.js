@@ -1,6 +1,9 @@
 import bcrypt from "bcryptjs";
 import Maker from "../models/Maker.js";
 import Checker from "../models/Checker.js";
+import cloudinary from "../config/cloudinary.js";
+import QuestionPaper from "../models/QuestionPaper.js";
+
 
 // Admin creates a new Maker or Checker
 const createUser = async (req, res) => {
@@ -82,4 +85,74 @@ const deleteUser = async (req, res) => {
     }
 };
 
-export { createUser, getAllUsers, deleteUser };
+const uploadPdfs = async (req, res) => {
+    try {
+        if (!req.files || req.files.length === 0) {
+            return res.status(400).json({ success: false, error: "No files uploaded" });
+        }
+
+        const uploadedFiles = [];
+
+        for (const file of req.files) {
+            // Upload PDF buffer directly to Cloudinary
+            const result = await new Promise((resolve, reject) => {
+                cloudinary.uploader.upload_stream(
+                    { resource_type: "image", folder: "pdf_uploads" }, // ✅ use "raw" for PDFs
+                    (error, result) => {
+                        if (error) reject(error);
+                        else resolve(result);
+                    }
+                ).end(file.buffer);
+            });
+
+            // Save into MongoDB
+            const savedDoc = await QuestionPaper.create({
+                name: file.originalname,
+                url: result.secure_url,
+                publicId: result.public_id,
+                uploadedBy: req.user ? req.user._id : null, // optional if you track who uploaded
+            });
+
+            uploadedFiles.push(savedDoc);
+        }
+
+        res.json({ success: true, files: uploadedFiles });
+    } catch (err) {
+        console.error("Upload failed:", err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+};
+
+// Get all uploaded PDFs
+const getAllPdfs = async (req, res) => {
+    try {
+        const pdfs = await QuestionPaper.find().sort({ createdAt: -1 });
+        res.json({ success: true, files: pdfs });
+    } catch (err) {
+        console.error("Error fetching PDFs:", err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+};
+
+// Delete a PDF by ID
+const deletePdf = async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        const pdf = await QuestionPaper.findById(id);
+        if (!pdf) return res.status(404).json({ success: false, error: "PDF not found" });
+
+        // Delete from Cloudinary
+        await cloudinary.uploader.destroy(pdf.publicId, { resource_type: "raw" });
+
+        // Delete from DB using deleteOne
+        await QuestionPaper.deleteOne({ _id: id });
+
+        res.json({ success: true, message: "PDF deleted successfully" });
+    } catch (err) {
+        console.error("Error deleting PDF:", err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+};
+
+export { createUser, getAllUsers, deleteUser ,uploadPdfs ,getAllPdfs,deletePdf };

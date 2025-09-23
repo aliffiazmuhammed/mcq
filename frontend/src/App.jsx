@@ -21,6 +21,7 @@ import MakerLogin from "./pages/login/MakerLogin";
 import PdfUploadPage from "./pages/admin/PdfUploadPage";
 import CreateUserPage from "./pages/admin/CreateUserPage";
 import ShowallUsersPage from "./pages/admin/ShowallUsersPage";
+import PdfListPage from "./pages/admin/PdfListPage";
 
 function PrivateRoute({ children, role }) {
   const { user, loading } = useAuth();
@@ -72,6 +73,7 @@ export default function App() {
             <Route path="pdf-upload" element={<PdfUploadPage />} />
             <Route path="create-user" element={<CreateUserPage />} />
             <Route path="show-users" element={<ShowallUsersPage />} />
+            <Route path="list-pdf" element={<PdfListPage />} />
           </Route>
           <Route
             path="/maker"

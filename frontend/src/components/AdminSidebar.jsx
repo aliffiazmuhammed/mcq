@@ -2,7 +2,7 @@ import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useState } from "react";
 import { HiMenu, HiX } from "react-icons/hi";
-import { FiUpload, FiUserPlus , FiUser } from "react-icons/fi"; // Import new icons
+import { FiUpload, FiUserPlus , FiUser , FiBookOpen } from "react-icons/fi"; // Import new icons
 
 export default function AdminSidebar() {
   const { user, logout } = useAuth();
@@ -12,19 +12,25 @@ export default function AdminSidebar() {
   // Sidebar menu items for the admin
   const menuItems = [
     {
-      name: "PDF Upload",
-      path: "/admin/pdf-upload",
-      icon: <FiUpload size={20} />,
-    },
-    {
       name: "Create User",
       path: "/admin/create-user",
       icon: <FiUserPlus size={20} />,
     },
     {
+      name: "PDF Upload",
+      path: "/admin/pdf-upload",
+      icon: <FiUpload size={20} />,
+    },
+    
+    {
       name: "Show Users",
       path: "/admin/show-users",
       icon: <FiUser size={20} />,
+    },
+    {
+      name: "Show PDFs",
+      path: "/admin/list-pdf",
+      icon: <FiBookOpen size={20} />,
     },
   ];
 
