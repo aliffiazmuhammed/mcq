@@ -1,47 +1,44 @@
 import mongoose from "mongoose";
 import { QUESTION_STATUS } from "../constants/roles.js";
 
-// Question Schema
+// Schema for text+image field
+const TextImageSchema = new mongoose.Schema(
+    {
+        text: { type: String },
+        image: { type: String }, // URL if uploaded
+    },
+    { _id: false }
+);
+
 const questionSchema = new mongoose.Schema(
     {
-        text: {
-            type: String,
-            required: [true, "Question text is required"],
-        },
+        question: TextImageSchema, // ✅ { text, image }
+
         subject: {
             type: String,
             required: [true, "Subject is required"],
         },
-        course: {
-            type: String,
-        },
-        grade: {
-            type: String,
-        },
-        chapter: {
-            type: String,
-        },
+        course: String,
+        grade: String,
+        chapter: String,
+
         options: [
             {
-                text: { type: String, required: true },
+                ...TextImageSchema.obj, // ✅ { text, image }
                 isCorrect: { type: Boolean, default: false },
-                // image will be added later
             },
         ],
-        explanation: {
-            type: String,
-        },
+
+        explanation: TextImageSchema, // ✅ { text, image }
+        reference: TextImageSchema,   // ✅ { text, image }
+
         complexity: {
             type: String,
             enum: ["Easy", "Medium", "Hard"],
             default: "Easy",
         },
-        keywords: {
-            type: [String], // store as array for easy search
-        },
-        referenceFile: {
-            type: String, // for image/pdf uploads later
-        },
+        keywords: { type: [String] },
+
         maker: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "Maker",
@@ -52,9 +49,7 @@ const questionSchema = new mongoose.Schema(
             enum: Object.values(QUESTION_STATUS),
             default: QUESTION_STATUS.PENDING,
         },
-        checkerComments: {
-            type: String,
-        },
+        checkerComments: String,
         checkedBy: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "Checker",
@@ -64,5 +59,4 @@ const questionSchema = new mongoose.Schema(
 );
 
 const Question = mongoose.model("Question", questionSchema);
-
 export default Question;

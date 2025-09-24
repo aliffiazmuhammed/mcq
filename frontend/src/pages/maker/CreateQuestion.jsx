@@ -44,7 +44,6 @@ export default function CreateQuestion() {
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
   const [loading, setLoading] = useState(false);
 
-
  useEffect(() => {
    if (id) {
      const fetchDraft = async () => {
@@ -55,30 +54,30 @@ export default function CreateQuestion() {
          });
 
          const q = res.data;
-
+         console.log(q)
          // Map backend Question → formData shape
-         setFormData({
-           _id: q._id,
-           course: q.course || "",
-           grade: q.grade || "",
-           subject: q.subject || "",
-           chapter: q.chapter || "",
-           questionText: q.text || "", // backend has "text"
-           questionImage: null, // load images later if needed
-           choices: q.options?.map((opt) => ({
-             text: opt.text,
-             image: null,
-           })) || [
-             { text: "", image: null },
-             { text: "", image: null },
-           ],
-           correctAnswer: q.options?.findIndex((opt) => opt.isCorrect) ?? 0,
-           explanation: q.explanation || "",
-           explanationImage: null,
-           complexity: q.complexity || "Easy",
-           keywords: q.keywords || "",
-           referenceImage: null,
-         });
+        setFormData({
+          _id: q._id,
+          course: q.course || "",
+          grade: q.grade || "",
+          subject: q.subject || "",
+          chapter: q.chapter || "",
+          questionText: q.question.text || "",
+          questionImage: q.questionImage || null, // ✅ keep backend image
+          choices: q.options?.map((opt) => ({
+            text: opt.text,
+            image: opt.image || null, // ✅ keep choice images
+          })) || [
+            { text: "", image: null },
+            { text: "", image: null },
+          ],
+          correctAnswer: q.options?.findIndex((opt) => opt.isCorrect) ?? 0,
+          explanation: q.explanation || "",
+          explanationImage: q.explanationImage || null, // ✅ keep backend image
+          complexity: q.complexity || "Easy",
+          keywords: q.keywords || "",
+          referenceImage: q.referenceImage || null, // ✅ keep backend image
+        });
        } catch (err) {
          console.error("Error loading draft", err);
        }
@@ -86,6 +85,8 @@ export default function CreateQuestion() {
      fetchDraft();
    }
  }, [id]);
+
+ console.log(formData)
 
   const onCropComplete = useCallback((_, croppedAreaPixels) => {
     setCroppedAreaPixels(croppedAreaPixels);
@@ -137,7 +138,7 @@ export default function CreateQuestion() {
     try {
       setLoading(true);
       const blob = await getCroppedImg(cropModal.src, croppedAreaPixels, zoom);
-      const croppedFile = new File([blob], "cropped.jpg", {
+      const croppedFile = new File([blob], `cropped_${Date.now()}.jpg`, {
         type: "image/jpeg",
       });
 
@@ -165,24 +166,57 @@ export default function CreateQuestion() {
 const handleSubmit = async (type) => {
   setLoading(true);
   try {
-    const payload = {
-      _id: formData._id || undefined,
-      course: formData.course,
-      grade: formData.grade,
-      subject: formData.subject,
-      chapter: formData.chapter,
-      questionText: formData.questionText,
-      choices: formData.choices.map((c) => ({ text: c.text })),
-      correctAnswer: formData.correctAnswer,
-      explanation: formData.explanation,
-      complexity: formData.complexity,
-      keywords: formData.keywords,
-      status: type === "Draft" ? "Draft" : "Pending",
-    };
+    const formPayload = new FormData();
 
+    // Append ID if updating an existing question
+    if (formData._id) {
+      formPayload.append("_id", formData._id);
+    }
+
+    // 1. Append all main question fields
+    formPayload.append("course", formData.course);
+    formPayload.append("grade", formData.grade);
+    formPayload.append("subject", formData.subject);
+    formPayload.append("chapter", formData.chapter);
+    formPayload.append("questionText", formData.questionText);
+    formPayload.append("correctAnswer", formData.correctAnswer);
+    formPayload.append("explanation", formData.explanation);
+    formPayload.append("complexity", formData.complexity);
+    formPayload.append("keywords", formData.keywords);
+    formPayload.append("status", type === "Draft" ? "Draft" : "Pending");
+
+    // 2. Append main images if they are File objects
+    if (formData.questionImage instanceof File) {
+      formPayload.append("questionImage", formData.questionImage);
+    }
+    if (formData.explanationImage instanceof File) {
+      formPayload.append("explanationImage", formData.explanationImage);
+    }
+    if (formData.referenceImage instanceof File) {
+      formPayload.append("referenceImage", formData.referenceImage);
+    }
+
+    // 3. Process choices and send a flag for each image
+    formData.choices.forEach((choice) => {
+      // Always append the text to maintain the array's total length
+      formPayload.append("choicesText[]", choice.text || "");
+
+      // Conditionally append the image file and a corresponding 'true'/'false' flag
+      if (choice.image instanceof File) {
+        formPayload.append("choicesImage", choice.image);
+        formPayload.append("hasImage[]", "true");
+      } else {
+        formPayload.append("hasImage[]", "false");
+      }
+    });
+
+    // 4. Send the request to the backend
     const token = localStorage.getItem("token");
-    const res = await axios.post(`${host}/api/questions/create`, payload, {
-      headers: { Authorization: `Bearer ${token}` },
+    await axios.post(`${host}/api/questions/create`, formPayload, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "multipart/form-data",
+      },
     });
 
     alert(
@@ -190,14 +224,18 @@ const handleSubmit = async (type) => {
         type === "Draft" ? "saved as draft" : "submitted"
       } successfully!`
     );
-    setFormData(initialFormData); // ✅ Reset form
+    setFormData(initialFormData); // Reset form after successful submission
   } catch (err) {
-    console.error(err);
-    alert("Error saving question");
+    console.error("Error submitting question:", err);
+    alert(
+      "An error occurred while saving the question. Please check the console for details."
+    );
   } finally {
+    
     setLoading(false);
   }
 };
+
 
   return (
     <div className="max-w-5xl mx-auto p-6 bg-white rounded-lg shadow-md relative">

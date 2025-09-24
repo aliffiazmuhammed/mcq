@@ -2,10 +2,21 @@ import express from "express";
 import { createOrUpdateQuestion, getQuestionById, getDraftQuestions, deleteQuestions, submitQuestionsForApproval, getSubmittedQuestions } from "../controllers/questionController.js";
 import { protect, authorize } from "../middlewares/authmiddleware.js";
 import { ROLES } from "../constants/roles.js";
+import upload from "../middlewares/uploadmiddleware.js";
 
 const router = express.Router();
 
-router.post("/create", protect, createOrUpdateQuestion);
+router.post(
+    "/create",
+    protect,
+    upload.fields([
+        { name: "questionImage", maxCount: 1 },
+        { name: "explanationImage", maxCount: 1 },
+        { name: "referenceImage", maxCount: 1 },
+        { name: "choicesImage", maxCount: 10 },
+    ]),
+    createOrUpdateQuestion
+);
 router.get("/drafts", protect, authorize(ROLES.MAKER), getDraftQuestions);
 router.delete("/delete", protect, deleteQuestions);
 router.put("/submit", protect, submitQuestionsForApproval);
