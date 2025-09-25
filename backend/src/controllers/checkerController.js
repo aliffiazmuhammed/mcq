@@ -129,11 +129,39 @@ const bulkApproveQuestions = async (req, res) => {
         res.status(500).json({ message: "A server error occurred during the bulk approval process." });
     }
 };
+const getQuestionById = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // The authorization check is now handled by the 'authorize' middleware,
+        // so we can remove that logic from here.
+
+        const question = await Question.findById(id)
+            .populate("maker", "name email")
+            .populate("checkedBy", "name email");
+
+        if (!question) {
+            return res.status(404).json({ message: "Question not found." });
+        }
+
+        // If the code reaches this point, the user is authorized.
+        // We can now safely send the data.
+        return res.json(question);
+
+    } catch (err) {
+        console.error("Error fetching question by ID:", err);
+        if (err.kind === 'ObjectId') {
+            return res.status(400).json({ message: "Invalid question ID format." });
+        }
+        return res.status(500).json({ message: "Server error." });
+    }
+};
 
 export {
     getPendingQuestions,
     approveQuestion,
     rejectQuestion,
     getReviewedQuestions,
-    bulkApproveQuestions
+    bulkApproveQuestions,
+    getQuestionById
 };

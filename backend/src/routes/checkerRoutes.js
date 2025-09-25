@@ -4,7 +4,8 @@ import {
     approveQuestion,
     rejectQuestion,
     getReviewedQuestions,
-    bulkApproveQuestions
+    bulkApproveQuestions,
+    getQuestionById
 } from "../controllers/checkerController.js";
 import { protect, authorize } from "../middlewares/authmiddleware.js";
 
@@ -15,5 +16,6 @@ router.put("/questions/:id/approve",protect, approveQuestion);
 router.put("/questions/:id/reject", protect,rejectQuestion);
 router.put('/questions/approve-bulk', protect, bulkApproveQuestions);
 router.get("/questions/reviewed", getReviewedQuestions);
+router.get("/questions/:id", protect, authorize('checker', 'admin'), getQuestionById);
 
 export default router;

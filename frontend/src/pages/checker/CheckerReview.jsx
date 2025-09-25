@@ -1,166 +1,13 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { host } from "../../utils/APIRoutes";
-
-// --- Helper Components ---
-
-const ImageModal = ({ src, onClose }) => {
-  if (!src) return null;
-  return (
-    <div
-      className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50"
-      onClick={onClose}
-    >
-      <div className="relative p-4">
-        <img
-          src={src}
-          alt="Enlarged question content"
-          className="max-w-screen-lg max-h-screen-lg object-contain"
-        />
-        <button
-          onClick={onClose}
-          className="absolute top-0 right-0 m-4 text-white text-3xl font-bold"
-        >
-          &times;
-        </button>
-      </div>
-    </div>
-  );
-};
-
-const QuestionDetailsModal = ({ question, onClose, onAction }) => {
-  const [comment, setComment] = useState("");
-
-  if (!question) return null;
-
-  const handleReject = () => {
-    if (!comment.trim()) {
-      alert("Please provide a comment before rejecting.");
-      return;
-    }
-    onAction("reject", question._id, comment);
-  };
-
-  const handleApprove = () => {
-    onAction("approve", question._id);
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col">
-        <div className="p-6 border-b flex justify-between items-center">
-          <h2 className="text-2xl font-bold text-gray-800">
-            Review Question Details
-          </h2>
-          <button
-            onClick={onClose}
-            className="text-3xl text-gray-500 hover:text-gray-800"
-          >
-            &times;
-          </button>
-        </div>
-
-        <div className="p-6 space-y-6 overflow-y-auto">
-          {/* Question Section */}
-          <div>
-            <h3 className="font-semibold text-lg mb-2">Question:</h3>
-            {question.question.image && (
-              <img
-                src={question.question.image}
-                alt="Question"
-                className="rounded-lg max-h-72 w-auto mb-2 border"
-              />
-            )}
-            <p>{question.question.text}</p>
-          </div>
-
-          {/* Options Section */}
-          <div>
-            <h3 className="font-semibold text-lg mb-2">Options:</h3>
-            <ul className="space-y-2">
-              {question.options.map((opt, idx) => (
-                <li
-                  key={idx}
-                  className={`p-3 rounded-md flex items-start gap-3 ${
-                    opt.isCorrect
-                      ? "bg-green-100 border-green-300 border"
-                      : "bg-gray-100"
-                  }`}
-                >
-                  <span className="font-bold">{idx + 1}.</span>
-                  <div className="flex-grow">
-                    {opt.image && (
-                      <img
-                        src={opt.image}
-                        alt={`Option ${idx + 1}`}
-                        className="rounded max-h-32 w-auto mb-1 border"
-                      />
-                    )}
-                    <p>{opt.text}</p>
-                  </div>
-                  {opt.isCorrect && (
-                    <span className="font-bold text-green-700">
-                      (Correct Answer)
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Explanation Section */}
-          {question.explanation?.text && (
-            <div>
-              <h3 className="font-semibold text-lg mb-2">Explanation:</h3>
-              {question.explanation.image && (
-                <img
-                  src={question.explanation.image}
-                  alt="Explanation"
-                  className="rounded-lg max-h-72 w-auto mb-2 border"
-                />
-              )}
-              <p className="p-3 bg-blue-50 rounded-md">
-                {question.explanation.text}
-              </p>
-            </div>
-          )}
-
-          {/* Rejection Comment Section */}
-          <div>
-            <h3 className="font-semibold text-lg mb-2">
-              Feedback / Rejection Comment:
-            </h3>
-            <textarea
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              placeholder="Provide clear feedback if rejecting..."
-              className="w-full h-24 p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-red-500"
-            />
-          </div>
-        </div>
-
-        <div className="p-6 border-t flex justify-end gap-4 bg-gray-50">
-          <button
-            onClick={handleReject}
-            className="bg-red-600 text-white px-6 py-2 rounded-md font-semibold hover:bg-red-700 transition"
-          >
-            Reject
-          </button>
-          <button
-            onClick={handleApprove}
-            className="bg-green-600 text-white px-6 py-2 rounded-md font-semibold hover:bg-green-700 transition"
-          >
-            Approve
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
+import { useNavigate } from "react-router-dom";
 
 // --- Main Component ---
 
 export default function CheckerReview() {
+
+   const navigate = useNavigate();
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedQuestions, setSelectedQuestions] = useState([]);
@@ -189,6 +36,7 @@ export default function CheckerReview() {
     };
     fetchPending();
   }, []);
+
   const makers = [
     "All",
     ...new Set(questions.map((q) => q.maker?.name).filter(Boolean)),
@@ -247,7 +95,6 @@ export default function CheckerReview() {
 
   const handleSingleAction = async (action, id, comment = "") => {
     try {
-      console.log(id)
       const token = localStorage.getItem("token");
       if (action === "approve") {
         await axios.put(
@@ -388,7 +235,7 @@ export default function CheckerReview() {
                     <td className="p-4">{q.grade || "N/A"}</td>
                     <td className="p-4 text-center">
                       <button
-                        onClick={() => setDetailsModalQuestion(q)}
+                        onClick={() => navigate(`/checker/details/${q._id}`)}
                         className="font-medium text-blue-600 hover:underline"
                       >
                         View Details
@@ -408,13 +255,6 @@ export default function CheckerReview() {
           </div>
         )}
       </div>
-
-      <ImageModal src={imageModalSrc} onClose={() => setImageModalSrc(null)} />
-      <QuestionDetailsModal
-        question={detailsModalQuestion}
-        onClose={() => setDetailsModalQuestion(null)}
-        onAction={handleSingleAction}
-      />
     </div>
   );
 }

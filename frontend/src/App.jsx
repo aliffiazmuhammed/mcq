@@ -22,6 +22,7 @@ import PdfUploadPage from "./pages/admin/PdfUploadPage";
 import CreateUserPage from "./pages/admin/CreateUserPage";
 import ShowallUsersPage from "./pages/admin/ShowallUsersPage";
 import PdfListPage from "./pages/admin/PdfListPage";
+import QuestionDetailPage from "./pages/checker/QuestionDetailPage";
 
 function PrivateRoute({ children, role }) {
   const { user, loading } = useAuth();
@@ -99,6 +100,7 @@ export default function App() {
           >
             <Route path="review" element={<CheckerReview />} />
             <Route path="accepted" element={<AcceptedQuestions />} />
+            <Route path="details/:id" element={<QuestionDetailPage />} />
           </Route>
 
           {/* Fallback */}

@@ -175,7 +175,7 @@ export default function AcceptedQuestions() {
                     </td>
                     <td className="p-4 text-center">
                       <button
-                        onClick={() => navigate(`/checker/reviewed/${q._id}`)} // Navigate on click
+                        onClick={() => navigate(`/checker/details/${q._id}`)} // Navigate on click
                         className="font-medium text-blue-600 hover:underline"
                       >
                         View Details
