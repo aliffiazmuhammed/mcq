@@ -4,11 +4,6 @@ import cloudinary from "../config/cloudinary.js";
 
 const createOrUpdateQuestion = async (req, res) => {
     try {
-
-        // console.log("==== Incoming Request Data ====");
-        // console.log("req.body:", req.body);
-        // console.log("req.files:", req.files);
-        // console.log("===============================");
         const {
             _id, course, grade, subject, chapter, questionText,
             correctAnswer, explanation, complexity, keywords, status,
@@ -28,16 +23,23 @@ const createOrUpdateQuestion = async (req, res) => {
             }
         };
 
-        // 1. Upload main images
+        // --- CORRECTED MAIN IMAGE LOGIC ---
+        // 1. If a new file exists, upload it.
+        // 2. If not, use the existing image URL sent from the frontend.
+        // 3. If neither exist, it will be null.
+        const questionImage = req.files?.questionImage
+            ? await uploadToCloudinary(req.files.questionImage[0])
+            : (existingQuestionImage || null);
 
-        const questionImage = req.files?.questionImage ? await uploadToCloudinary(req.files.questionImage[0]) : null;
+        const explanationImage = req.files?.explanationImage
+            ? await uploadToCloudinary(req.files.explanationImage[0])
+            : (existingExplanationImage || null);
 
-        const explanationImage = req.files?.explanationImage ? await uploadToCloudinary(req.files.explanationImage[0]) : null;
+        const referenceImage = req.files?.referenceImage
+            ? await uploadToCloudinary(req.files.referenceImage[0])
+            : (existingReferenceImage || null);
 
-        const referenceImage = req.files?.referenceImage ? await uploadToCloudinary(req.files.referenceImage[0]) : null;
-
-        // --- CORRECTED CHOICES LOGIC ---
-
+        // --- CHOICES LOGIC (Already Correct) ---
         let choiceTexts = req.body.choicesText || [];
         if (!Array.isArray(choiceTexts)) choiceTexts = [choiceTexts];
 
@@ -46,36 +48,28 @@ const createOrUpdateQuestion = async (req, res) => {
         let existingImages = req.body.existingChoiceImages || [];
         if (existingImages && !Array.isArray(existingImages)) existingImages = [existingImages];
 
-
-        // Step A: Upload all NEW choice images in parallel and get their URLs.
-        // This is safe because it maps directly from the choiceFiles array.
         const newImageUrls = await Promise.all(
             (choiceFiles || []).map(file => uploadToCloudinary(file))
         );
 
-        // Step B: Build the final list of choice images, merging new and existing ones.
         let fileCounter = 0;
         const finalImageUrls = hasImageFlags.map((hasImage, i) => {
             if (hasImage !== 'true') return null;
 
-            // If the existing image at this index is a URL, it means it's an old file.
-            // But if it's an empty string, it means a NEW file was uploaded in its place.
             if (existingImages[i]) {
-                return existingImages[i]; // Use the old URL
+                return existingImages[i];
             } else {
-                // A new file was uploaded for this slot, so take the next available URL.
                 return newImageUrls[fileCounter++];
             }
         });
 
-        // Step C: Map the texts and combine with the final image URLs.
         const mappedChoices = choiceTexts.map((text, i) => ({
             text: text || "",
-            image: finalImageUrls[i], // The URL is now correctly and safely assigned
+            image: finalImageUrls[i],
             isCorrect: Number(correctAnswer) === i,
         }));
 
-        // --- END OF CORRECTION ---
+        // --- END OF CHOICES LOGIC ---
 
         const questionData = {
             course, grade, subject, chapter,
@@ -106,6 +100,8 @@ const createOrUpdateQuestion = async (req, res) => {
         res.status(500).json({ message: "Server error" });
     }
 };
+
+
 const getQuestionById = async (req, res) => {
     try {
         const { id } = req.params; // Get the question ID from the URL
@@ -114,6 +110,7 @@ const getQuestionById = async (req, res) => {
 
         // 1. Find the question by its ID
         const question = await Question.findById(id);
+        console.log(question)
 
         if (!question) {
             return res.status(404).json({ message: "Question not found" });
