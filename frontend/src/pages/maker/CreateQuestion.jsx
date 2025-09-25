@@ -476,8 +476,8 @@ export default function CreateQuestion() {
   );
 
   return (
-    <div className="bg-gray-50 min-h-screen py-10">
-      <div className="max-w-5xl mx-auto p-8 bg-white rounded-xl shadow-lg relative">
+    <div className="bg-gray-50 min-h-screen">
+      <div className="max-w-5xl p-8 bg-white rounded-xl shadow-lg relative">
         <h1 className="text-3xl font-bold mb-2 text-gray-800">
           {id ? "Edit Question" : "Create New Question"}
         </h1>

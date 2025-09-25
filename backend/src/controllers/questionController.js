@@ -163,21 +163,73 @@ const deleteQuestions = async (req, res) => {
         const userId = req.user._id;
 
         if (!ids || !Array.isArray(ids) || ids.length === 0) {
-            return res.status(400).json({ message: "No question IDs provided" });
+            return res.status(400).json({ message: "No question IDs provided." });
         }
 
-        // Delete only if the question belongs to the logged-in user
+        // 1. Find all questions that the user owns and intends to delete.
+        const questionsToDelete = await Question.find({
+            _id: { $in: ids },
+            maker: userId,
+        });
+
+        if (questionsToDelete.length === 0) {
+            return res.json({ message: "No matching questions found to delete." });
+        }
+
+        // 2. Collect all Cloudinary public IDs from all image fields.
+        const publicIdsToDelete = [];
+
+        // Helper function to safely extract the public ID from a Cloudinary URL
+        const getPublicIdFromUrl = (url) => {
+            if (!url) return null;
+            // Example URL: https://res.cloudinary.com/cloud_name/image/upload/v12345/folder/public_id.jpg
+            // We want to extract "folder/public_id"
+            const match = url.match(/v\d+\/(.+)\.\w{3,4}$/);
+            return match ? match[1] : null;
+        };
+
+        for (const q of questionsToDelete) {
+            // Add main images
+            if (q.question?.image) publicIdsToDelete.push(getPublicIdFromUrl(q.question.image));
+            if (q.explanation?.image) publicIdsToDelete.push(getPublicIdFromUrl(q.explanation.image));
+            if (q.reference?.image) publicIdsToDelete.push(getPublicIdFromUrl(q.reference.image));
+
+            // Add all choice images
+            if (q.options) {
+                for (const opt of q.options) {
+                    if (opt.image) publicIdsToDelete.push(getPublicIdFromUrl(opt.image));
+                }
+            }
+        }
+
+        // 3. If there are images, delete them from Cloudinary.
+        // We filter out any null values that may have resulted from empty image fields.
+        const validPublicIds = publicIdsToDelete.filter(id => id);
+
+        if (validPublicIds.length > 0) {
+            try {
+                // Use Cloudinary's bulk deletion API for efficiency
+                await cloudinary.api.delete_resources(validPublicIds);
+            } catch (cloudinaryError) {
+                // Log the Cloudinary error but proceed with database deletion.
+                // This prevents a Cloudinary issue from blocking the user's primary action.
+                console.error("Cloudinary deletion failed for some assets, but proceeding with DB deletion:", cloudinaryError);
+            }
+        }
+
+        // 4. Finally, delete the questions from the database.
         const result = await Question.deleteMany({
             _id: { $in: ids },
             maker: userId,
         });
 
         return res.json({
-            message: `${result.deletedCount} question(s) deleted successfully`,
+            message: `${result.deletedCount} question(s) deleted successfully.`,
         });
+
     } catch (error) {
         console.error("Error deleting questions:", error);
-        res.status(500).json({ message: "Server error while deleting questions" });
+        res.status(500).json({ message: "Server error while deleting questions." });
     }
 };
 
@@ -209,20 +261,21 @@ const getSubmittedQuestions = async (req, res) => {
     try {
         const userId = req.user._id;
 
-        // Fetch questions and populate the maker's name for filtering
-        const questions = await Question.find({ maker: userId })
-            .populate("maker", "name") // Optional: If you want to filter by maker name
+        // Fetch questions that were created by the user AND are NOT in 'Draft' status.
+        const questions = await Question.find({
+            maker: userId,
+            status: { $ne: "Draft" } // <-- THE FIX: Exclude drafts from the results.
+        })
+            .populate("maker", "name") // Optional: Still useful for filtering on some pages
             .sort({ createdAt: -1 });
 
-        // The schema already defines the structure well.
-        // We can send the questions directly. The frontend will handle what to display.
-        // This ensures that the question object with its text and image is sent.
+        // Now, this 'questions' array will only contain questions with statuses
+        // like "Pending", "Approved", or "Rejected".
         res.json(questions);
 
     } catch (error) {
         console.error("Error fetching submitted questions:", error);
         res.status(500).json({ message: "Server error" });
     }
-}
-
+};
 export { createOrUpdateQuestion, getQuestionById, getDraftQuestions, deleteQuestions, submitQuestionsForApproval, getSubmittedQuestions };

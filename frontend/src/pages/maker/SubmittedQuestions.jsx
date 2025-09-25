@@ -4,21 +4,24 @@ import { host } from "../../utils/APIRoutes";
 
 // A reusable component to display content that can be text, an image, or both.
 const ContentDisplay = ({ content }) => {
-    if (!content) return <p className="text-gray-400 italic">N/A</p>;
-    return (
-        <>
-            {/* Added break-words to prevent long text from overflowing */}
-            {content.text && <p className="text-gray-800 break-words">{content.text}</p>}
-            {content.image && (
-                <img
-                    src={content.image}
-                    alt="Question content"
-                    // CORRECTED LINE: w-full makes it responsive, h-auto maintains aspect ratio.
-                    className="mt-2 rounded-lg w-full h-auto max-h-72 object-contain"
-                />
-            )}
-        </>
-    );
+  if (!content) return <p className="text-gray-400 italic">N/A</p>;
+  return (
+    <>
+      {/* Added break-words to prevent long text from overflowing */}
+      {content.text && (
+        <p className="text-gray-800 break-words">{content.text}</p>
+      )}
+      {content.image && (
+        <img
+          src={content.image}
+          alt="Question content"
+          // --- MODIFIED LINE ---
+          // Reduced max-h-72 to max-h-56 to make the image smaller.
+          className="mt-2 rounded-lg w-full h-auto max-h-56 object-contain"
+        />
+      )}
+    </>
+  );
 };
 
 // A reusable component for status badges.
