@@ -3,6 +3,7 @@ import Maker from "../models/Maker.js";
 import Checker from "../models/Checker.js";
 import cloudinary from "../config/cloudinary.js";
 import QuestionPaper from "../models/QuestionPaper.js";
+import Question from "../models/Question.js";
 
 
 // Admin creates a new Maker or Checker
@@ -155,4 +156,87 @@ const deletePdf = async (req, res) => {
     }
 };
 
-export { createUser, getAllUsers, deleteUser ,uploadPdfs ,getAllPdfs,deletePdf };
+const getDashboardStats = async (req, res) => {
+    try {
+        // 1. Get Summary Card Counts in parallel for speed
+        const [totalQuestions, totalApproved, totalRejected, totalPending] = await Promise.all([
+            Question.countDocuments(),
+            Question.countDocuments({ status: 'Approved' }),
+            Question.countDocuments({ status: 'Rejected' }),
+            Question.countDocuments({ status: 'Pending' })
+        ]);
+
+        // 2. Get Status Distribution using an aggregation pipeline
+        const statusDistribution = await Question.aggregate([
+            { $group: { _id: '$status', count: { $sum: 1 } } },
+            { $project: { status: '$_id', count: 1, _id: 0 } }
+        ]);
+
+        // 3. Get Maker Performance (questions created and submitted)
+        const makerPerformance = await Question.aggregate([
+            { $match: { status: { $ne: 'Draft' } } }, // Only count questions that have been submitted
+            {
+                $group: {
+                    _id: '$maker',
+                    // Use $cond to conditionally sum counts for each status
+                    approved: { $sum: { $cond: [{ $eq: ['$status', 'Approved'] }, 1, 0] } },
+                    rejected: { $sum: { $cond: [{ $eq: ['$status', 'Rejected'] }, 1, 0] } },
+                    pending: { $sum: { $cond: [{ $eq: ['$status', 'Pending'] }, 1, 0] } },
+                    totalSubmitted: { $sum: 1 } // Total count of non-draft questions
+                }
+            },
+            { $sort: { totalSubmitted: -1 } }, // Sort by the total number of submitted questions
+            { $limit: 10 },
+            { $lookup: { from: 'makers', localField: '_id', foreignField: '_id', as: 'makerDetails' } },
+            { $unwind: '$makerDetails' },
+            {
+                // Project the new fields to be sent to the frontend
+                $project: {
+                    makerName: '$makerDetails.name',
+                    approved: 1,
+                    rejected: 1,
+                    pending: 1,
+                    totalSubmitted: 1,
+                    _id: 0
+                }
+            }
+        ]);
+
+        // 4. Get Checker Performance (questions reviewed)
+        const checkerPerformance = await Question.aggregate([
+            { $match: { status: { $in: ['Approved', 'Rejected'] } } }, // Only count reviewed questions
+            {
+                $group: {
+                    _id: '$checkedBy',
+                    approved: { $sum: { $cond: [{ $eq: ['$status', 'Approved'] }, 1, 0] } },
+                    rejected: { $sum: { $cond: [{ $eq: ['$status', 'Rejected'] }, 1, 0] } },
+                    totalReviewed: { $sum: 1 }
+                }
+            },
+            { $sort: { totalReviewed: -1 } },
+            { $limit: 10 }, // Get top 10 checkers
+            { $lookup: { from: 'checkers', localField: '_id', foreignField: '_id', as: 'checkerDetails' } },
+            { $unwind: '$checkerDetails' },
+            { $project: { checkerName: '$checkerDetails.name', approved: 1, rejected: 1, totalReviewed: 1, _id: 0 } }
+        ]);
+
+        // 5. Send all stats in a single response
+        res.json({
+            summary: {
+                totalQuestions,
+                totalApproved,
+                totalRejected,
+                totalPending
+            },
+            statusDistribution,
+            makerPerformance,
+            checkerPerformance
+        });
+
+    } catch (error) {
+        console.error("Error fetching dashboard stats:", error);
+        res.status(500).json({ message: "Server error while fetching dashboard statistics." });
+    }
+};
+
+export { createUser, getAllUsers, deleteUser ,uploadPdfs ,getAllPdfs,deletePdf,getDashboardStats };

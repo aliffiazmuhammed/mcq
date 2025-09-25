@@ -16,7 +16,7 @@ const QuestionPaperSchema = new mongoose.Schema(
         },
         uploadedBy: {
             type: mongoose.Schema.Types.ObjectId,
-            ref: "User", // optional if you want to track uploader
+            ref: "User", 
         },
     },
     { timestamps: true }
