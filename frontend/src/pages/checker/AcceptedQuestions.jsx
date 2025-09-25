@@ -1,197 +1,200 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import axios from "axios";
+import { useNavigate } from "react-router-dom";
 import { host } from "../../utils/APIRoutes";
+
+// --- Helper Components ---
+
+const StatusBadge = ({ status }) => {
+  const statusStyles = {
+    Approved: "bg-green-100 text-green-800",
+    Rejected: "bg-red-100 text-red-800",
+  };
+  return (
+    <span
+      className={`px-3 py-1 text-xs font-medium rounded-full ${
+        statusStyles[status] || ""
+      }`}
+    >
+      {status}
+    </span>
+  );
+};
+
+// --- Main Component ---
 
 export default function AcceptedQuestions() {
   const [questions, setQuestions] = useState([]);
-  const [expandedQuestion, setExpandedQuestion] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
-  // Search & filter states
-  const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("All");
-  const [courseFilter, setCourseFilter] = useState("All");
-  const [makerFilter, setMakerFilter] = useState("All");
+  // State for filters
+  const [filterStatus, setFilterStatus] = useState("All");
+  const [filterMaker, setFilterMaker] = useState("All");
+  const [filterCourse, setFilterCourse] = useState("All");
 
-  // Fetch reviewed questions
   useEffect(() => {
-    const fetchReviewedQuestions = async () => {
+    const fetchReviewed = async () => {
       try {
-        const res = await axios.get(`${host}/api/checker/questions/reviewed`);
-        setQuestions(res.data); // backend sends an array of reviewed questions
+        const token = localStorage.getItem("token");
+        const res = await axios.get(`${host}/api/checker/questions/reviewed`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setQuestions(res.data);
       } catch (err) {
         console.error("Error fetching reviewed questions:", err);
+      } finally {
+        setLoading(false);
       }
     };
-    fetchReviewedQuestions();
+    fetchReviewed();
   }, []);
 
-  // Filtered + searched questions
+  // Deriving unique values for filter dropdowns
+  const makers = [
+    "All",
+    ...new Set(questions.map((q) => q.maker?.name).filter(Boolean)),
+  ];
+  const courses = [
+    "All",
+    ...new Set(questions.map((q) => q.course).filter(Boolean)),
+  ];
+
+  // Apply filters to the questions list
   const filteredQuestions = questions.filter((q) => {
-    const matchesSearch =
-      q.text?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      q.maker?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      q.course?.toLowerCase().includes(searchTerm.toLowerCase());
-
-    const matchesStatus = statusFilter === "All" || q.status === statusFilter;
-
-    const matchesCourse = courseFilter === "All" || q.course === courseFilter;
-
-    const matchesMaker = makerFilter === "All" || q.maker?.name === makerFilter;
-
-    return matchesSearch && matchesStatus && matchesCourse && matchesMaker;
+    const matchesStatus = filterStatus === "All" || q.status === filterStatus;
+    const matchesMaker = filterMaker === "All" || q.maker?.name === filterMaker;
+    const matchesCourse = filterCourse === "All" || q.course === filterCourse;
+    return matchesStatus && matchesMaker && matchesCourse;
   });
 
   return (
-    <div className="max-w-5xl mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">Reviewed Questions</h1>
-
-      {/* Search and Filters */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-6">
-        <input
-          type="text"
-          placeholder="Search by text, maker, or course..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="border rounded px-3 py-2 w-full sm:w-1/3"
-        />
-
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="border rounded px-3 py-2 w-full sm:w-1/5"
-        >
-          <option value="All">All Status</option>
-          <option value="Approved">Approved</option>
-          <option value="Rejected">Rejected</option>
-        </select>
-
-        <select
-          value={courseFilter}
-          onChange={(e) => setCourseFilter(e.target.value)}
-          className="border rounded px-3 py-2 w-full sm:w-1/5"
-        >
-          <option value="All">All Courses</option>
-          {[...new Set(questions.map((q) => q.course))].map((course) => (
-            <option key={course} value={course}>
-              {course}
-            </option>
-          ))}
-        </select>
-
-        <select
-          value={makerFilter}
-          onChange={(e) => setMakerFilter(e.target.value)}
-          className="border rounded px-3 py-2 w-full sm:w-1/5"
-        >
-          <option value="All">All Makers</option>
-          {[...new Set(questions.map((q) => q.maker?.name))].map((maker) => (
-            <option key={maker} value={maker}>
-              {maker}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {filteredQuestions.length === 0 ? (
-        <p className="text-gray-500">
-          No reviewed questions match your filter.
-        </p>
-      ) : (
-        <div className="space-y-4">
-          {filteredQuestions.map((q) => (
-            <div
-              key={q._id}
-              className="bg-white p-4 rounded shadow hover:bg-gray-50 cursor-pointer"
-              onClick={() =>
-                setExpandedQuestion(expandedQuestion?._id === q._id ? null : q)
-              }
-            >
-              {/* Header: Question + Status */}
-              <div className="flex justify-between items-center">
-                <p className="font-semibold">{q.text}</p>
-                <span
-                  className={`px-2 py-1 rounded text-sm ${
-                    q.status === "Approved"
-                      ? "bg-green-100 text-green-800"
-                      : "bg-red-100 text-red-800"
-                  }`}
-                >
-                  {q.status}
-                </span>
-              </div>
-
-              {/* Expanded Details */}
-              {expandedQuestion?._id === q._id && (
-                <div className="mt-4 border-t pt-4 space-y-3">
-                  <p>
-                    <span className="font-semibold">Maker:</span>{" "}
-                    {q.maker?.name} ({q.maker?.email})
-                  </p>
-                  <p>
-                    <span className="font-semibold">Subject:</span> {q.subject}
-                  </p>
-                  <p>
-                    <span className="font-semibold">Chapter:</span> {q.chapter}
-                  </p>
-                  <p>
-                    <span className="font-semibold">Grade:</span> {q.grade}
-                  </p>
-                  <p>
-                    <span className="font-semibold">Course:</span> {q.course}
-                  </p>
-                  <p>
-                    <span className="font-semibold">Complexity:</span>{" "}
-                    {q.complexity}
-                  </p>
-                  <p>
-                    <span className="font-semibold">Keywords:</span>{" "}
-                    {q.keywords?.join(", ")}
-                  </p>
-
-                  {/* Options */}
-                  <div>
-                    <p className="font-semibold">Options:</p>
-                    <ul className="list-decimal list-inside">
-                      {q.options.map((opt, idx) => (
-                        <li key={idx} className="flex items-center gap-2">
-                          {opt.text}
-                          {opt.isCorrect && (
-                            <span className="text-green-600 font-bold">
-                              (Correct)
-                            </span>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  {/* Explanation */}
-                  <p>
-                    <span className="font-semibold">Explanation:</span>{" "}
-                    {q.explanation}
-                  </p>
-
-                  {/* Checker Comment (only for rejected) */}
-                  {q.checkerComment && (
-                    <p>
-                      <span className="font-semibold">Checker Comment:</span>{" "}
-                      {q.checkerComment}
-                    </p>
-                  )}
-
-                  {/* Created/Updated Dates */}
-                  <p className="text-sm text-gray-500">
-                    Created: {new Date(q.createdAt).toLocaleString()}
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    Updated: {new Date(q.updatedAt).toLocaleString()}
-                  </p>
-                </div>
-              )}
+    <div className="bg-gray-50 min-h-screen">
+      <div className="max-w-7xl mx-auto p-4 sm:p-6">
+        {/* --- Header & Filters --- */}
+        <div className="bg-white p-6 rounded-lg shadow-md mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+            <h1 className="text-3xl font-bold text-gray-800">
+              Reviewed Questions
+            </h1>
+            <span className="mt-2 sm:mt-0 text-lg font-medium text-gray-600">
+              {filteredQuestions.length} Result(s)
+            </span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6 pt-4 border-t">
+            <div>
+              <label className="block text-sm font-medium text-gray-600 mb-1">
+                Filter by Status
+              </label>
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="border border-gray-300 rounded-md px-3 py-2 w-full focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="All">All Statuses</option>
+                <option value="Approved">Approved</option>
+                <option value="Rejected">Rejected</option>
+              </select>
             </div>
-          ))}
+            <div>
+              <label className="block text-sm font-medium text-gray-600 mb-1">
+                Filter by Maker
+              </label>
+              <select
+                value={filterMaker}
+                onChange={(e) => setFilterMaker(e.target.value)}
+                className="border border-gray-300 rounded-md px-3 py-2 w-full focus:ring-2 focus:ring-blue-500"
+              >
+                {makers.map((name, idx) => (
+                  <option key={idx} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-600 mb-1">
+                Filter by Course
+              </label>
+              <select
+                value={filterCourse}
+                onChange={(e) => setFilterCourse(e.target.value)}
+                className="border border-gray-300 rounded-md px-3 py-2 w-full focus:ring-2 focus:ring-blue-500"
+              >
+                {courses.map((name, idx) => (
+                  <option key={idx} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
         </div>
-      )}
+
+        {/* --- Main Content: Questions Table --- */}
+        {loading ? (
+          <div className="flex justify-center items-center h-60">
+            <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        ) : (
+          <div className="bg-white shadow-md rounded-lg overflow-x-auto">
+            <table className="w-full text-sm text-left text-gray-600">
+              <thead className="text-xs text-gray-700 uppercase bg-gray-100">
+                <tr>
+                  <th className="p-4">Question</th>
+                  <th className="p-4">Maker</th>
+                  <th className="p-4">Course</th>
+                  <th className="p-4">Status</th>
+                  <th className="p-4 text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredQuestions.map((q) => (
+                  <tr
+                    key={q._id}
+                    className="bg-white border-b hover:bg-gray-50"
+                  >
+                    <td className="p-4 font-medium text-gray-900">
+                      <div className="flex items-center gap-3">
+                        {q.question.image && (
+                          <img
+                            src={q.question.image}
+                            alt="Q"
+                            className="h-10 w-16 object-contain rounded border"
+                          />
+                        )}
+                        <span className="line-clamp-2">
+                          {q.question.text || "No text"}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="p-4">{q.maker?.name || "N/A"}</td>
+                    <td className="p-4">{q.course || "N/A"}</td>
+                    <td className="p-4">
+                      <StatusBadge status={q.status} />
+                    </td>
+                    <td className="p-4 text-center">
+                      <button
+                        onClick={() => navigate(`/checker/reviewed/${q._id}`)} // Navigate on click
+                        className="font-medium text-blue-600 hover:underline"
+                      >
+                        View Details
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {filteredQuestions.length === 0 && (
+                  <tr>
+                    <td colSpan="5" className="text-center p-10 text-gray-500">
+                      No reviewed questions match your filters.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
