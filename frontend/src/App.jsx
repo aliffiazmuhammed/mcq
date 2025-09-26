@@ -27,6 +27,8 @@ import AdminDashboard from "./pages/admin/AdminDashboard";
 import AvailablePdfsPage from "./pages/maker/AvailablePdfsPage";
 import ClaimedPdfsPage from "./pages/maker/ClaimedPdfsPage";
 import ShowQuestionPaper from "./pages/checker/ShowQuestionPaper";
+import CreateCoursePage from "./pages/admin/CreateCoursePage";
+import ViewCoursesPage from "./pages/admin/ViewCoursesPage";
 
 function PrivateRoute({ children, role }) {
   const { user, loading } = useAuth();
@@ -80,6 +82,8 @@ export default function App() {
             <Route path="show-users" element={<ShowallUsersPage />} />
             <Route path="list-pdf" element={<PdfListPage />} />
             <Route path="admin-dashboard" element={<AdminDashboard />} />
+            <Route path="create-courses" element={<CreateCoursePage />} />
+            <Route path="view-courses" element={<ViewCoursesPage />} />
           </Route>
           <Route
             path="/maker"

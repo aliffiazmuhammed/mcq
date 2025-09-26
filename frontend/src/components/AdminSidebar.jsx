@@ -2,7 +2,7 @@ import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useState } from "react";
 import { HiMenu, HiX } from "react-icons/hi";
-import { FiUpload, FiUserPlus , FiUser , FiBookOpen , FiBarChart } from "react-icons/fi"; // Import new icons
+import { FiUpload, FiUserPlus , FiUser , FiBookOpen , FiBarChart, FiBookmark, FiBook } from "react-icons/fi"; // Import new icons
 
 export default function AdminSidebar() {
   const { user, logout } = useAuth();
@@ -17,7 +17,7 @@ export default function AdminSidebar() {
       icon: <FiUserPlus size={20} />,
     },
     {
-      name: "PDF Upload",
+      name: "Question Paper Upload",
       path: "/admin/pdf-upload",
       icon: <FiUpload size={20} />,
     },
@@ -28,7 +28,7 @@ export default function AdminSidebar() {
       icon: <FiUser size={20} />,
     },
     {
-      name: "Show PDFs",
+      name: "Question Papers",
       path: "/admin/list-pdf",
       icon: <FiBookOpen size={20} />,
     },
@@ -36,6 +36,16 @@ export default function AdminSidebar() {
       name: "Dashboard",
       path: "/admin/admin-dashboard",
       icon: <FiBarChart size={20} />,
+    },
+    {
+      name: "Create Courses",
+      path: "/admin/create-courses",
+      icon: <FiBookmark size={20} />,
+    },
+    {
+      name: "View Courses",
+      path: "/admin/view-courses",
+      icon: <FiBook size={20} />,
     },
   ];
 

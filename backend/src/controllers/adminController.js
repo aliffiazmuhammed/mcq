@@ -4,7 +4,7 @@ import Checker from "../models/Checker.js";
 import cloudinary from "../config/cloudinary.js";
 import QuestionPaper from "../models/QuestionPaper.js";
 import Question from "../models/Question.js";
-
+import Course from '../models/Course.js'; 
 
 // Admin creates a new Maker or Checker
 const createUser = async (req, res) => {
@@ -52,7 +52,7 @@ const createUser = async (req, res) => {
     }
 };
 
-// Optional: Get all users
+//  Get all users
 const getAllUsers = async (req, res) => {
     try {
         const makers = await Maker.find().select("-password");
@@ -65,7 +65,7 @@ const getAllUsers = async (req, res) => {
     }
 };
 
-// Optional: Delete user
+//  Delete user
 const deleteUser = async (req, res) => {
     try {
         const { role, id } = req.params;
@@ -270,4 +270,77 @@ const getDashboardStats = async (req, res) => {
     }
 };
 
-export { createUser, getAllUsers, deleteUser, uploadPdfs ,getAllPdfs,deletePdf,getDashboardStats };
+const createCourse = async (req, res) => {
+    try {
+        const {
+            title,
+            description,
+            standard,
+            category,
+            syllabus,
+            examType,
+            startDate,
+            endDate,
+            status
+        } = req.body;
+
+        // Basic validation
+        if (!title || !standard || !syllabus || !examType) {
+            return res.status(400).json({ message: "Please fill in all required fields." });
+        }
+
+        // ✅ Check if a course with the same title already exists (case-insensitive)
+        const existingCourse = await Course.findOne({ title: { $regex: `^${title}$`, $options: 'i' } });
+        if (existingCourse) {
+            return res.status(409).json({ // 409 Conflict is the appropriate status for duplicates
+                message: "A course with this title already exists. Please choose a different title."
+            });
+        }
+
+        const newCourse = new Course({
+            title,
+            description,
+            standard,
+            category,
+            syllabus,
+            examType,
+            startDate,
+            endDate,
+            status,
+            createdBy: req.user._id
+        });
+
+        await newCourse.save();
+
+        res.status(201).json({
+            success: true,
+            message: "Course created successfully!",
+            course: newCourse,
+        });
+
+    } catch (err) {
+        // ✅ Robustly handle the unique constraint error in case of a race condition
+        if (err.code === 11000 && err.keyPattern && err.keyPattern.title) {
+            return res.status(409).json({ message: "A course with this title already exists." });
+        }
+        console.error("Error creating course:", err);
+        res.status(500).json({ message: "Server error while creating the course." });
+    }
+};
+
+const getAllCourses = async (req, res) => {
+    try {
+        // Fetch all course documents
+        const courses = await Course.find({})
+            .populate("createdBy", "name") // Populates the admin's name who created the course
+            .sort({ createdAt: -1 });      // Sort by the most recently created
+
+        res.json(courses);
+
+    } catch (err) {
+        console.error("Error fetching courses:", err);
+        res.status(500).json({ message: "Server error while fetching courses." });
+    }
+};
+
+export { createUser, getAllUsers, deleteUser, uploadPdfs ,getAllPdfs,deletePdf,getDashboardStats,createCourse,getAllCourses };
