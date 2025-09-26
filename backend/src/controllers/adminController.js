@@ -93,45 +93,76 @@ const uploadPdfs = async (req, res) => {
         }
 
         const uploadedFiles = [];
+        const failedFiles = [];
 
         for (const file of req.files) {
-            // Upload PDF buffer directly to Cloudinary
-            const result = await new Promise((resolve, reject) => {
-                cloudinary.uploader.upload_stream(
-                    { resource_type: "image", folder: "pdf_uploads" }, // ✅ use "raw" for PDFs
-                    (error, result) => {
-                        if (error) reject(error);
-                        else resolve(result);
-                    }
-                ).end(file.buffer);
-            });
+            try {
+                // Check if a file with the same name already exists to handle the unique constraint
+                const existingFile = await QuestionPaper.findOne({ name: file.originalname });
+                if (existingFile) {
+                    failedFiles.push({
+                        name: file.originalname,
+                        reason: "A file with this name already exists in the database.",
+                    });
+                    continue; // Skip to the next file
+                }
 
-            // Save into MongoDB
-            const savedDoc = await QuestionPaper.create({
-                name: file.originalname,
-                url: result.secure_url,
-                publicId: result.public_id,
-                uploadedBy: req.user ? req.user._id : null, // optional if you track who uploaded
-            });
+                // Upload PDF buffer directly to Cloudinary using "raw" for non-image files
+                const result = await new Promise((resolve, reject) => {
+                    const uploadStream = cloudinary.uploader.upload_stream(
+                        { resource_type: "image", folder: "pdf_uploads" },
+                        (error, result) => {
+                            if (error) return reject(error);
+                            resolve(result);
+                        }
+                    );
+                    uploadStream.end(file.buffer);
+                });
 
-            uploadedFiles.push(savedDoc);
+                // Save file metadata into MongoDB
+                const savedDoc = await QuestionPaper.create({
+                    name: file.originalname,
+                    url: result.secure_url,
+                    publicId: result.public_id,
+                    uploadedBy: req.user ? req.user._id : null, // Assumes user info is in req.user
+                    // The 'usedBy' field will automatically default to null as per the schema
+                });
+
+                uploadedFiles.push(savedDoc);
+            } catch (err) {
+                console.error(`Failed to process file ${file.originalname}:`, err);
+                failedFiles.push({ name: file.originalname, reason: err.message });
+            }
         }
 
-        res.json({ success: true, files: uploadedFiles });
+        res.status(201).json({
+            success: true,
+            message: "Files processed successfully.",
+            uploadedFiles,
+            failedFiles,
+        });
     } catch (err) {
-        console.error("Upload failed:", err);
-        res.status(500).json({ success: false, error: err.message });
+        console.error("Upload process failed:", err);
+        res.status(500).json({ success: false, error: "An unexpected error occurred during the upload process." });
     }
 };
 
 // Get all uploaded PDFs
 const getAllPdfs = async (req, res) => {
     try {
-        const pdfs = await QuestionPaper.find().sort({ createdAt: -1 });
-        res.json({ success: true, files: pdfs });
+        // Fetch all documents from the QuestionPaper collection.
+        // CRITICAL: .populate() will look at the 'usedBy' field, find the Maker with that ID,
+        // and attach their details (specifically their 'name') to the response.
+        const allPapers = await QuestionPaper.find({})
+            .populate('usedBy', 'name') // Populates the 'usedBy' field with the maker's name
+            .sort({ createdAt: -1 });   // Sort by newest first
+
+        // The response will now include the maker's name if a paper is claimed.
+        res.json({ success: true, files: allPapers });
+
     } catch (err) {
-        console.error("Error fetching PDFs:", err);
-        res.status(500).json({ success: false, error: err.message });
+        console.error("Error fetching all PDFs:", err);
+        res.status(500).json({ success: false, error: "Server error while fetching PDFs." });
     }
 };
 
@@ -144,7 +175,7 @@ const deletePdf = async (req, res) => {
         if (!pdf) return res.status(404).json({ success: false, error: "PDF not found" });
 
         // Delete from Cloudinary
-        await cloudinary.uploader.destroy(pdf.publicId, { resource_type: "raw" });
+        await cloudinary.uploader.destroy(pdf.publicId, { resource_type: "image" });
 
         // Delete from DB using deleteOne
         await QuestionPaper.deleteOne({ _id: id });
@@ -239,4 +270,4 @@ const getDashboardStats = async (req, res) => {
     }
 };
 
-export { createUser, getAllUsers, deleteUser ,uploadPdfs ,getAllPdfs,deletePdf,getDashboardStats };
+export { createUser, getAllUsers, deleteUser, uploadPdfs ,getAllPdfs,deletePdf,getDashboardStats };

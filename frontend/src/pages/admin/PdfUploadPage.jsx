@@ -4,78 +4,80 @@ import { host } from "../../utils/APIRoutes";
 export default function PdfUploadPage() {
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [loading, setLoading] = useState(false);
-const token = localStorage.getItem("token");
+  const token = localStorage.getItem("token");
   // Handle file selection, adding new files to the existing list
-const handleFileChange = (e) => {
-  const newFiles = Array.from(e.target.files);
-  const validPdfs = newFiles.filter((file) => file.type === "application/pdf");
+  const handleFileChange = (e) => {
+    const newFiles = Array.from(e.target.files);
+    const validPdfs = newFiles.filter(
+      (file) => file.type === "application/pdf"
+    );
 
-  if (validPdfs.length > 0) {
-    setSelectedFiles((prevFiles) => {
-      // Create a set of existing file names for efficient lookup
-      const existingFileNames = new Set(prevFiles.map((file) => file.name));
+    if (validPdfs.length > 0) {
+      setSelectedFiles((prevFiles) => {
+        // Create a set of existing file names for efficient lookup
+        const existingFileNames = new Set(prevFiles.map((file) => file.name));
 
-      // Filter out files that already exist in the list
-      const uniqueNewFiles = validPdfs.filter(
-        (file) => !existingFileNames.has(file.name)
-      );
+        // Filter out files that already exist in the list
+        const uniqueNewFiles = validPdfs.filter(
+          (file) => !existingFileNames.has(file.name)
+        );
 
-      // Alert the user if any duplicate files were ignored
-      if (uniqueNewFiles.length < validPdfs.length) {
-        alert("Some duplicate files were not added.");
+        // Alert the user if any duplicate files were ignored
+        if (uniqueNewFiles.length < validPdfs.length) {
+          alert("Some duplicate files were not added.");
+        }
+
+        return [...prevFiles, ...uniqueNewFiles];
+      });
+    } else {
+      // Only alert if the user selected invalid files
+      if (newFiles.length > 0) {
+        alert("Only PDF files are allowed. Invalid files were not added.");
       }
-
-      return [...prevFiles, ...uniqueNewFiles];
-    });
-  } else {
-    // Only alert if the user selected invalid files
-    if (newFiles.length > 0) {
-      alert("Only PDF files are allowed. Invalid files were not added.");
     }
-  }
-  // Clear the input value to allow the same file(s) to be selected again
-  e.target.value = null;
-};
+    // Clear the input value to allow the same file(s) to be selected again
+    e.target.value = null;
+  };
 
   // Remove a specific file from the list
   const removeFile = (fileToRemove) => {
     setSelectedFiles(selectedFiles.filter((file) => file !== fileToRemove));
   };
 
-const handleSubmit = async (e) => {
-  e.preventDefault();
-  if (selectedFiles.length === 0) return alert("Please select files!");
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (selectedFiles.length === 0) return alert("Please select files!");
 
-  setLoading(true);
+    setLoading(true);
 
-  const formData = new FormData();
-  selectedFiles.forEach((file) => formData.append("pdfFiles", file)); // name matches backend
+    const formData = new FormData();
+    selectedFiles.forEach((file) => formData.append("pdfFiles", file)); // name matches backend
 
-  try {
-    const res = await fetch(`${host}/api/admin/pdfs`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`, 
-      },
-      body: formData,
-    });
+    try {
+      const res = await fetch(`${host}/api/admin/pdfs`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
 
-    const data = await res.json();
+      const data = await res.json();
 
-    if (data.success) {
-      console.log("Uploaded files:", data.files);
-      alert("Upload successful!");
-      setSelectedFiles([]);
-    } else {
-      alert("Upload failed: " + data.error);
+      if (data.success) {
+        console.log("Uploaded files:", data.files);
+        alert("Upload successful!");
+        setSelectedFiles([]);
+      } else {
+        alert("Upload failed: " + data.error);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Upload failed");
+    } finally {
+      setLoading(false);
     }
-  } catch (err) {
-    console.error(err);
-    alert("Upload failed");
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   return (
     <div className="max-w-5xl mx-auto p-6 bg-white rounded-lg shadow-md relative">

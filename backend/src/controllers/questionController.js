@@ -1,6 +1,7 @@
 import Question from "../models/Question.js";
 import { QUESTION_STATUS } from "../constants/roles.js";
 import cloudinary from "../config/cloudinary.js"; 
+import QuestionPaper from "../models/QuestionPaper.js";
 
 const createOrUpdateQuestion = async (req, res) => {
     try {
@@ -278,4 +279,75 @@ const getSubmittedQuestions = async (req, res) => {
         res.status(500).json({ message: "Server error" });
     }
 };
-export { createOrUpdateQuestion, getQuestionById, getDraftQuestions, deleteQuestions, submitQuestionsForApproval, getSubmittedQuestions };
+
+
+const getAvailablePapers = async (req, res) => {
+    try {
+        // Find all documents in the QuestionPaper collection where the 'usedBy' field is null.
+        // This effectively gets all "unlocked" or "available" papers.
+        const availablePapers = await QuestionPaper.find({ usedBy: null })
+            .populate("uploadedBy", "name") // Optional: gets the name of the admin who uploaded it
+            .sort({ createdAt: -1 });      // Shows the newest papers first
+
+        res.json(availablePapers);
+
+    } catch (err) {
+        console.error("Error fetching available papers:", err);
+        res.status(500).json({ message: "Server error while fetching available papers." });
+    }
+};
+
+const claimPaper = async (req, res) => {
+    try {
+        const paperId = req.params.id;
+        const makerId = req.user._id; // The logged-in maker's ID (from the 'protect' middleware)
+
+        // This is a critical atomic operation. It finds a document that matches BOTH conditions:
+        // 1. The _id matches the one the user clicked.
+        // 2. The 'usedBy' field is STILL null.
+        // If it finds a match, it updates 'usedBy' to the current maker's ID.
+        const updatedPaper = await QuestionPaper.findOneAndUpdate(
+            { _id: paperId, usedBy: null },
+            { $set: { usedBy: makerId } },
+            { new: true } // This option tells Mongoose to return the document AFTER the update
+        );
+
+        // If 'updatedPaper' is null, it means the paper was not found OR another maker
+        // claimed it in the moments after the page was loaded. This prevents a race condition.
+        if (!updatedPaper) {
+            return res.status(409).json({ // 409 Conflict is the appropriate status code
+                message: "This paper is no longer available. It may have been taken by another user. Please refresh and select a different one."
+            });
+        }
+
+        res.json({
+            success: true,
+            message: "Paper successfully assigned to you.",
+            paper: updatedPaper
+        });
+
+    } catch (err) {
+        console.error("Error claiming paper:", err);
+        res.status(500).json({ message: "Server error while claiming the paper." });
+    }
+};
+
+const getClaimedPapers = async (req, res) => {
+    try {
+        const makerId = req.user._id; // Get the maker's ID from the auth middleware
+
+        // Find all documents in the QuestionPaper collection where the 'usedBy' field
+        // matches the currently logged-in maker's ID.
+        const claimedPapers = await QuestionPaper.find({ usedBy: makerId })
+            .populate("uploadedBy", "name") // Optional: gets the name of the admin who uploaded it
+            .sort({ updatedAt: -1 });      // Shows the most recently claimed/updated papers first
+
+        res.json(claimedPapers);
+
+    } catch (err) {
+        console.error("Error fetching claimed papers:", err);
+        res.status(500).json({ message: "Server error while fetching claimed papers." });
+    }
+};
+
+export { createOrUpdateQuestion, getQuestionById, getDraftQuestions, deleteQuestions, submitQuestionsForApproval, getSubmittedQuestions , getAvailablePapers,claimPaper,getClaimedPapers};

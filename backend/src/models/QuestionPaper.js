@@ -5,6 +5,7 @@ const QuestionPaperSchema = new mongoose.Schema(
         name: {
             type: String,
             required: true,
+            unique: true, // Ensures that every document has a unique name.
         },
         url: {
             type: String,
@@ -16,10 +17,15 @@ const QuestionPaperSchema = new mongoose.Schema(
         },
         uploadedBy: {
             type: mongoose.Schema.Types.ObjectId,
-            ref: "User", 
+            ref: "Admin",
+        },
+        usedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Maker",
+            default: null,
         },
     },
     { timestamps: true }
 );
 
-export default mongoose.model("QuestionPaper", QuestionPaperSchema);
+export default mongoose.model("QuestionPaper", QuestionPaperSchema)

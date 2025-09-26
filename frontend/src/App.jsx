@@ -24,6 +24,8 @@ import ShowallUsersPage from "./pages/admin/ShowallUsersPage";
 import PdfListPage from "./pages/admin/PdfListPage";
 import QuestionDetailPage from "./pages/checker/QuestionDetailPage";
 import AdminDashboard from "./pages/admin/AdminDashboard";
+import AvailablePdfsPage from "./pages/maker/AvailablePdfsPage";
+import ClaimedPdfsPage from "./pages/maker/ClaimedPdfsPage";
 
 
 function PrivateRoute({ children, role }) {
@@ -77,7 +79,7 @@ export default function App() {
             <Route path="create-user" element={<CreateUserPage />} />
             <Route path="show-users" element={<ShowallUsersPage />} />
             <Route path="list-pdf" element={<PdfListPage />} />
-            <Route path="admin-dashboard" element = {<AdminDashboard/>}/>
+            <Route path="admin-dashboard" element={<AdminDashboard />} />
           </Route>
           <Route
             path="/maker"
@@ -91,6 +93,8 @@ export default function App() {
             <Route path="create/:id" element={<CreateQuestion />} />
             <Route path="drafts" element={<DraftQuestions />} />
             <Route path="submitted" element={<SubmittedQuestions />} />
+            <Route path="availabe-pdfs" element={<AvailablePdfsPage />} />
+            <Route path="claimed-pdfs" element={<ClaimedPdfsPage />} />
           </Route>
 
           <Route

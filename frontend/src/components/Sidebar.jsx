@@ -12,6 +12,8 @@ export default function Sidebar() {
     { name: "Create Question", path: "/maker/create", icon: "➕" },
     { name: "Draft Questions", path: "/maker/drafts", icon: "📝" },
     { name: "Submitted Questions", path: "/maker/submitted", icon: "📤" },
+    { name: "Availabe Pdfs", path: "/maker/availabe-pdfs", icon: "📚" },
+    { name: "Claimed Pdfs", path: "/maker/claimed-pdfs", icon: "📚" },
   ];
 const navigate = useNavigate();
   return (
