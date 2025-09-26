@@ -26,7 +26,7 @@ import QuestionDetailPage from "./pages/checker/QuestionDetailPage";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AvailablePdfsPage from "./pages/maker/AvailablePdfsPage";
 import ClaimedPdfsPage from "./pages/maker/ClaimedPdfsPage";
-
+import ShowQuestionPaper from "./pages/checker/ShowQuestionPaper";
 
 function PrivateRoute({ children, role }) {
   const { user, loading } = useAuth();
@@ -108,6 +108,7 @@ export default function App() {
             <Route path="review" element={<CheckerReview />} />
             <Route path="accepted" element={<AcceptedQuestions />} />
             <Route path="details/:id" element={<QuestionDetailPage />} />
+            <Route path="claimed-pdfs" element={<ShowQuestionPaper />} />
           </Route>
 
           {/* Fallback */}

@@ -12,6 +12,7 @@ const navigate = useNavigate();
   const menuItems = [
     { name: "Review Questions", path: "/checker/review", icon: "📝" },
     { name: "Accepted Questions", path: "/checker/accepted", icon: "✅" },
+    { name: "Question Papers", path: "/checker/claimed-pdfs", icon: "📗" },
   ];
 
   return (

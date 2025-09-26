@@ -1,4 +1,6 @@
 import Question from "../models/Question.js";
+import QuestionPaper from "../models/QuestionPaper.js";
+
 
 // Fetch all pending questions for checker
 const getPendingQuestions = async (req, res) => {
@@ -129,6 +131,8 @@ const bulkApproveQuestions = async (req, res) => {
         res.status(500).json({ message: "A server error occurred during the bulk approval process." });
     }
 };
+
+
 const getQuestionById = async (req, res) => {
     try {
         const { id } = req.params;
@@ -157,11 +161,27 @@ const getQuestionById = async (req, res) => {
     }
 };
 
+const getPapers = async (req, res) => {
+    try {
+        // Find all documents where 'usedBy' is NOT null.
+        // This finds all papers that have been locked by a maker.
+        const claimedPapers = await QuestionPaper.find({ usedBy: { $ne: null } })
+            .populate("usedBy", "name") // CRITICAL: Get the name of the maker who claimed it.
+            .sort({ updatedAt: -1 });  // Show the most recently claimed papers first.
+
+        res.json(claimedPapers);
+    } catch (err) {
+        console.error("Error fetching claimed papers:", err);
+        res.status(500).json({ message: "Server error while fetching claimed papers." });
+    }
+};
+
 export {
     getPendingQuestions,
     approveQuestion,
     rejectQuestion,
     getReviewedQuestions,
     bulkApproveQuestions,
-    getQuestionById
+    getQuestionById,
+    getPapers
 };
