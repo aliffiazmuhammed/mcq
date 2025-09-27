@@ -1,30 +1,30 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
-import { host } from "../../utils/APIRoutes";
+import { host } from "../../utils/APIRoutes"; 
+// --- Reusable Components ---
 
-// A reusable component to display content that can be text, an image, or both.
-const ContentDisplay = ({ content }) => {
-  if (!content) return <p className="text-gray-400 italic">N/A</p>;
+// UPDATED: Now smaller and triggers a modal on click.
+const ContentDisplay = ({ content, onImageClick }) => {
+  if (!content || (!content.text && !content.image)) {
+    return <p className="text-gray-400 italic">N/A</p>;
+  }
   return (
-    <>
-      {/* Added break-words to prevent long text from overflowing */}
+    <div className="flex flex-col gap-2">
       {content.text && (
-        <p className="text-gray-800 break-words">{content.text}</p>
+        <p className="text-gray-800 break-words line-clamp-3">{content.text}</p>
       )}
       {content.image && (
         <img
           src={content.image}
-          alt="Question content"
-          // --- MODIFIED LINE ---
-          // Reduced max-h-72 to max-h-56 to make the image smaller.
-          className="mt-2 rounded-lg w-full h-auto max-h-56 object-contain"
+          alt="Question thumbnail"
+          onClick={() => onImageClick(content.image)}
+          className="mt-1 rounded-md w-20 h-14 object-cover cursor-pointer hover:opacity-80 transition"
         />
       )}
-    </>
+    </div>
   );
 };
 
-// A reusable component for status badges.
 const StatusBadge = ({ status }) => {
   const statusStyles = {
     Approved: "bg-green-100 text-green-700",
@@ -43,10 +43,13 @@ const StatusBadge = ({ status }) => {
   );
 };
 
+// --- Main Component ---
+
 export default function SubmittedQuestions() {
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedComments, setSelectedComments] = useState(null);
+  const [imageInView, setImageInView] = useState(null); // State for image modal
 
   // Filters
   const [search, setSearch] = useState("");
@@ -57,10 +60,12 @@ export default function SubmittedQuestions() {
     const fetchQuestions = async () => {
       try {
         const token = localStorage.getItem("token");
+        // This endpoint should populate 'course' and 'questionPaper'
         const res = await axios.get(`${host}/api/questions/submitted`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        // Format status to be consistently capitalized
+
+        console.log(res.data)
         const formatted = res.data.map((q) => ({
           ...q,
           status:
@@ -76,14 +81,10 @@ export default function SubmittedQuestions() {
     fetchQuestions();
   }, []);
 
-  const handleViewComments = (question) =>
-    setSelectedComments(question.checkerComments);
-  const handleCloseComments = () => setSelectedComments(null);
-
-  // Get unique course names for the filter dropdown
+  // Get unique course titles for the filter dropdown
   const courses = [
     "All",
-    ...new Set(questions.map((q) => q.course).filter(Boolean)),
+    ...new Set(questions.map((q) => q.course?.title).filter(Boolean)),
   ];
 
   // Apply search and filters
@@ -91,7 +92,8 @@ export default function SubmittedQuestions() {
     const textToSearch = (q.question?.text || "").toLowerCase();
     const matchesSearch = textToSearch.includes(search.toLowerCase().trim());
     const matchesStatus = filterStatus === "All" || q.status === filterStatus;
-    const matchesCourse = filterCourse === "All" || q.course === filterCourse;
+    const matchesCourse =
+      filterCourse === "All" || q.course?.title === filterCourse;
     return matchesSearch && matchesStatus && matchesCourse;
   });
 
@@ -144,62 +146,83 @@ export default function SubmittedQuestions() {
             No questions match your filters. 🧐
           </p>
         ) : (
-          <div className="space-y-6">
-            {/* Display each question as a detailed card */}
-            {filteredQuestions.map((q) => (
-              <div
-                key={q._id}
-                className="border border-gray-200 rounded-lg p-5 shadow-sm bg-white hover:shadow-lg transition-shadow duration-300"
-              >
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-                  {/* Left Side: Question Content */}
-                  <div className="md:col-span-8">
-                    <h2 className="text-lg font-semibold text-gray-900 mb-2">
-                      Question:
-                    </h2>
-                    <ContentDisplay content={q.question} />
-                  </div>
-
-                  {/* Right Side: Details and Status */}
-                  <div className="md:col-span-4 md:border-l md:pl-4">
-                    <div className="space-y-3">
-                      <div>
-                        <span className="font-semibold">Status: </span>
-                        <StatusBadge status={q.status} />
-                      </div>
-                      <div>
-                        <span className="font-semibold">Course: </span>
-                        {q.course}
-                      </div>
-                      <div>
-                        <span className="font-semibold">Grade: </span>
-                        {q.grade}
-                      </div>
-                      <div>
-                        <span className="font-semibold">Subject: </span>
-                        {q.subject}
-                      </div>
-                      <div>
-                        <span className="font-semibold">Difficulty: </span>
-                        {q.complexity}
-                      </div>
-
-                      {/* Action for Rejected Questions */}
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th
+                    scope="col"
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
+                    Question
+                  </th>
+                  <th
+                    scope="col"
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
+                    Course
+                  </th>
+                  <th
+                    scope="col"
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell"
+                  >
+                    Unit
+                  </th>
+                  <th
+                    scope="col"
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell"
+                  >
+                    Question Paper
+                  </th>
+                  <th
+                    scope="col"
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
+                    Status
+                  </th>
+                  <th
+                    scope="col"
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {filteredQuestions.map((q) => (
+                  <tr key={q._id}>
+                    <td className="px-6 py-4 whitespace-normal max-w-sm">
+                      <ContentDisplay
+                        content={q.question}
+                        onImageClick={setImageInView}
+                      />
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                      {q.course?.title || "N/A"}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 hidden md:table-cell">
+                      {q.unit}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 hidden lg:table-cell">
+                      {q.questionPaper?.name || "N/A"}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <StatusBadge status={q.status} />
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       {q.status === "Rejected" && (
-                        <div className="pt-2">
-                          <button
-                            onClick={() => handleViewComments(q)}
-                            className="w-full bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition-colors"
-                          >
-                            View Rejection Comments
-                          </button>
-                        </div>
+                        <button
+                          onClick={() => setSelectedComments(q.checkerComments)}
+                          className="text-indigo-600 hover:text-indigo-900"
+                        >
+                          View Comments
+                        </button>
                       )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
@@ -209,7 +232,7 @@ export default function SubmittedQuestions() {
         <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-60 z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6 relative">
             <button
-              onClick={handleCloseComments}
+              onClick={() => setSelectedComments(null)}
               className="absolute top-3 right-3 text-2xl text-gray-500 hover:text-gray-800"
             >
               &times;
@@ -218,6 +241,28 @@ export default function SubmittedQuestions() {
             <p className="text-gray-700 bg-red-50 p-4 rounded-md border border-red-200">
               {selectedComments}
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* Modal for viewing images */}
+      {imageInView && (
+        <div
+          className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-75 z-50 p-4"
+          onClick={() => setImageInView(null)}
+        >
+          <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full p-4 relative">
+            <button
+              onClick={() => setImageInView(null)}
+              className="absolute -top-4 -right-4 text-3xl text-white font-bold"
+            >
+              &times;
+            </button>
+            <img
+              src={imageInView}
+              alt="Full size question content"
+              className="rounded-lg w-full h-auto max-h-[80vh] object-contain"
+            />
           </div>
         </div>
       )}

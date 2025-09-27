@@ -262,16 +262,24 @@ const getSubmittedQuestions = async (req, res) => {
     try {
         const userId = req.user._id;
 
-        // Fetch questions that were created by the user AND are NOT in 'Draft' status.
+        // Fetch questions created by the user that are NOT in 'Draft' status.
         const questions = await Question.find({
             maker: userId,
-            status: { $ne: "Draft" } // <-- THE FIX: Exclude drafts from the results.
+            status: { $ne: "Draft" }
         })
-            .populate("maker", "name") // Optional: Still useful for filtering on some pages
+            // --- UPDATED ---
+            // Chain .populate() to retrieve data from referenced documents.
+
+            // For the 'course' field, get the referenced document and select only its 'title'.
+            .populate("course", "title")
+
+            // For the 'questionPaper' field, get the referenced document and select only its 'name'.
+            .populate("questionPaper", "name")
+
             .sort({ createdAt: -1 });
 
-        // Now, this 'questions' array will only contain questions with statuses
-        // like "Pending", "Approved", or "Rejected".
+        // The response for each question will now include objects for 'course' and 'questionPaper'
+        // For example: course: { _id: '...', title: '10th_CBSE' }
         res.json(questions);
 
     } catch (error) {
@@ -279,7 +287,6 @@ const getSubmittedQuestions = async (req, res) => {
         res.status(500).json({ message: "Server error" });
     }
 };
-
 
 const getAvailablePapers = async (req, res) => {
     try {
