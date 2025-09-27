@@ -5,6 +5,7 @@ import cloudinary from "../config/cloudinary.js";
 import QuestionPaper from "../models/QuestionPaper.js";
 import Question from "../models/Question.js";
 import Course from '../models/Course.js'; 
+import mongoose from "mongoose";
 
 // Admin creates a new Maker or Checker
 const createUser = async (req, res) => {
@@ -86,78 +87,119 @@ const deleteUser = async (req, res) => {
     }
 };
 
+const uploadPdfToCloudinary = (fileBuffer, courseTitle, subject, fileType) => {
+    return new Promise((resolve, reject) => {
+        // Sanitize inputs to create a valid folder path (e.g., "Computer Science" -> "Computer_Science")
+        const sanitizedCourse = courseTitle.replace(/\s+/g, '_');
+        const sanitizedSubject = subject.replace(/\s+/g, '_');
+
+        // Dynamically create the folder path, e.g., "question_papers/10th_CBSE_Science/question_paper"
+        const folderPath = `question_papers/${sanitizedCourse}_${sanitizedSubject}/${fileType}`;
+
+        cloudinary.uploader.upload_stream(
+            {
+                resource_type: "image", // Correct type for PDFs
+                folder: folderPath,   // Use the dynamic folder path
+            },
+            (error, result) => {
+                if (error) return reject(error);
+                resolve(result);
+            }
+        ).end(fileBuffer);
+    });
+};
+
 const uploadPdfs = async (req, res) => {
     try {
-        if (!req.files || req.files.length === 0) {
-            return res.status(400).json({ success: false, error: "No files uploaded" });
+        // 1. Destructure all metadata fields, including the new 'questionPaperYear'
+        const {
+            name,
+            course,
+            subject,
+            standard,
+            syllabus,
+            examType,
+            questionPaperYear, // ADDED
+            numberOfQuestions
+        } = req.body;
+
+        const questionPaperFile = req.files?.questionPaper?.[0];
+        const solutionPaperFile = req.files?.solutionPaper?.[0];
+
+        if (!questionPaperFile) {
+            return res.status(400).json({ message: "The Question Paper PDF is required." });
         }
 
-        const uploadedFiles = [];
-        const failedFiles = [];
-
-        for (const file of req.files) {
-            try {
-                // Check if a file with the same name already exists to handle the unique constraint
-                const existingFile = await QuestionPaper.findOne({ name: file.originalname });
-                if (existingFile) {
-                    failedFiles.push({
-                        name: file.originalname,
-                        reason: "A file with this name already exists in the database.",
-                    });
-                    continue; // Skip to the next file
-                }
-
-                // Upload PDF buffer directly to Cloudinary using "raw" for non-image files
-                const result = await new Promise((resolve, reject) => {
-                    const uploadStream = cloudinary.uploader.upload_stream(
-                        { resource_type: "image", folder: "pdf_uploads" },
-                        (error, result) => {
-                            if (error) return reject(error);
-                            resolve(result);
-                        }
-                    );
-                    uploadStream.end(file.buffer);
-                });
-
-                // Save file metadata into MongoDB
-                const savedDoc = await QuestionPaper.create({
-                    name: file.originalname,
-                    url: result.secure_url,
-                    publicId: result.public_id,
-                    uploadedBy: req.user ? req.user._id : null, // Assumes user info is in req.user
-                    // The 'usedBy' field will automatically default to null as per the schema
-                });
-
-                uploadedFiles.push(savedDoc);
-            } catch (err) {
-                console.error(`Failed to process file ${file.originalname}:`, err);
-                failedFiles.push({ name: file.originalname, reason: err.message });
-            }
+        const courseDoc = await Course.findById(course).select("title");
+        if (!courseDoc) {
+            return res.status(404).json({ message: "Selected course not found." });
         }
+        const courseTitle = courseDoc.title;
+
+        const uploadPromises = [uploadPdfToCloudinary(questionPaperFile.buffer, courseTitle, subject, 'question_paper')];
+        if (solutionPaperFile) {
+            uploadPromises.push(uploadPdfToCloudinary(solutionPaperFile.buffer, courseTitle, subject, 'solution_paper'));
+        }
+
+        const [questionPaperResult, solutionPaperResult] = await Promise.all(uploadPromises);
+
+        // 2. Create the new document data object, including the new field
+        const newQuestionPaperData = {
+            name,
+            course,
+            subject,
+            standard,
+            syllabus,
+            examType,
+            questionPaperYear, // ADDED
+            uploadedBy: req.user._id,
+            questionPaperFile: {
+                url: questionPaperResult.secure_url,
+                publicId: questionPaperResult.public_id,
+            },
+        };
+
+        if (solutionPaperResult) {
+            newQuestionPaperData.solutionPaperFile = {
+                url: solutionPaperResult.secure_url,
+                publicId: solutionPaperResult.public_id,
+            };
+        }
+        if (numberOfQuestions) {
+            newQuestionPaperData.numberOfQuestions = numberOfQuestions;
+        }
+
+        const newQuestionPaper = new QuestionPaper(newQuestionPaperData);
+        await newQuestionPaper.save();
 
         res.status(201).json({
             success: true,
-            message: "Files processed successfully.",
-            uploadedFiles,
-            failedFiles,
+            message: "Question paper uploaded successfully!",
+            paper: newQuestionPaper,
         });
+
     } catch (err) {
-        console.error("Upload process failed:", err);
-        res.status(500).json({ success: false, error: "An unexpected error occurred during the upload process." });
+        console.error("Upload failed:", err);
+        // Provide more specific validation error messages if they exist
+        if (err.name === 'ValidationError') {
+            return res.status(400).json({ success: false, message: err.message });
+        }
+        res.status(500).json({ success: false, message: "Server error during file upload." });
     }
 };
 
-// Get all uploaded PDFs
 const getAllPdfs = async (req, res) => {
     try {
         // Fetch all documents from the QuestionPaper collection.
-        // CRITICAL: .populate() will look at the 'usedBy' field, find the Maker with that ID,
-        // and attach their details (specifically their 'name') to the response.
         const allPapers = await QuestionPaper.find({})
-            .populate('usedBy', 'name') // Populates the 'usedBy' field with the maker's name
-            .sort({ createdAt: -1 });   // Sort by newest first
+            // Populate 'usedBy' to get the maker's name. If null, it remains null.
+            .populate('usedBy', 'name')
+            // NEW: Also populate the 'course' field to get the course's title.
+            .populate('course', 'title')
+            // Sort by newest first for a logical default order.
+            .sort({ createdAt: -1 });
 
-        // The response will now include the maker's name if a paper is claimed.
+        // The response will now include both the maker's name and the course title.
         res.json({ success: true, files: allPapers });
 
     } catch (err) {
@@ -170,22 +212,71 @@ const getAllPdfs = async (req, res) => {
 const deletePdf = async (req, res) => {
     const { id } = req.params;
 
+    // A transaction is crucial here to ensure all or none of the operations complete.
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
     try {
-        const pdf = await QuestionPaper.findById(id);
-        if (!pdf) return res.status(404).json({ success: false, error: "PDF not found" });
+        // 1. Find the document within the transaction to ensure it exists.
+        const pdf = await QuestionPaper.findById(id).session(session);
+        if (!pdf) {
+            // If not found, no need to proceed. Abort transaction.
+            throw new Error("Question Paper not found.");
+        }
 
-        // Delete from Cloudinary
-        await cloudinary.uploader.destroy(pdf.publicId, { resource_type: "image" });
+        // 2. Prepare to delete files from Cloudinary.
+        const cloudinaryPromises = [];
 
-        // Delete from DB using deleteOne
-        await QuestionPaper.deleteOne({ _id: id });
+        // Add the mandatory question paper file to the deletion list.
+        if (pdf.questionPaperFile?.publicId) {
+            cloudinaryPromises.push(
+                cloudinary.uploader.destroy(pdf.questionPaperFile.publicId, {
+                    resource_type: "image" // Use 'raw' for PDFs
+                })
+            );
+        }
 
-        res.json({ success: true, message: "PDF deleted successfully" });
+        // If an optional solution paper exists, add it to the deletion list.
+        if (pdf.solutionPaperFile?.publicId) {
+            cloudinaryPromises.push(
+                cloudinary.uploader.destroy(pdf.solutionPaperFile.publicId, {
+                    resource_type: "image" // Use 'raw' for PDFs
+                })
+            );
+        }
+
+        // Execute all Cloudinary deletions in parallel.
+        await Promise.all(cloudinaryPromises);
+
+        // 3. IMPORTANT: Delete all questions that are linked to this question paper.
+        // This prevents orphaned questions in your database.
+        await Question.deleteMany({ questionPaper: id }).session(session);
+
+        // 4. Finally, delete the QuestionPaper document from the database.
+        await QuestionPaper.findByIdAndDelete(id).session(session);
+
+        // 5. If all steps were successful, commit the transaction.
+        await session.commitTransaction();
+
+        res.json({ success: true, message: "Question Paper and all associated questions deleted successfully." });
+
     } catch (err) {
+        // If any step fails, abort the transaction to undo all changes.
+        await session.abortTransaction();
+
         console.error("Error deleting PDF:", err);
-        res.status(500).json({ success: false, error: err.message });
+
+        if (err.message.includes("not found")) {
+            return res.status(404).json({ success: false, error: err.message });
+        }
+
+        res.status(500).json({ success: false, error: "Server error during deletion. Operation was rolled back." });
+    } finally {
+        // Always end the session.
+        session.endSession();
     }
 };
+
 
 const getDashboardStats = async (req, res) => {
     try {

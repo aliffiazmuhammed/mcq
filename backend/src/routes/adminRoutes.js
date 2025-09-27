@@ -20,7 +20,14 @@ router.get("/users", getAllUsers);
 router.delete("/user/:role/:id", deleteUser);
 
 //upload pdf function
-router.post("/pdfs", upload.array("pdfFiles"), uploadPdfs);
+router.post(
+    "/pdfs",
+    upload.fields([
+        { name: 'questionPaper', maxCount: 1 },
+        { name: 'solutionPaper', maxCount: 1 }
+    ]),
+    uploadPdfs
+);
 
 // Get all PDFs
 router.get("/pdfs", getAllPdfs);

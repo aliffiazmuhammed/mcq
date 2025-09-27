@@ -22,6 +22,19 @@ const makerSchema = new mongoose.Schema(
             minlength: 6, // Enforces a minimum password length
             select: false, // Prevents password from being returned in queries
         },
+        // --- ADDED: Count fields for tracking question statuses ---
+        acceptedquestions: {
+            type: Number,
+            default: 0,
+        },
+        rejectedquestions: {
+            type: Number,
+            default: 0,
+        },
+        draftedquestions: {
+            type: Number,
+            default: 0,
+        },
     },
     { timestamps: true }
 );

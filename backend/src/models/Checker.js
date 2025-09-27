@@ -22,6 +22,16 @@ const checkerSchema = new mongoose.Schema(
             minlength: 6, // Enforces a minimum password length
             select: false, // Prevents password from being returned in queries
         },
+        // --- ADDED FIELDS ---
+        rejectedquestioncount: {
+            type: Number,
+            default: 0, // Default to 0 for new checkers
+        },
+        acceptedquestioncount: {
+            type: Number,
+            default: 0, // Default to 0 for new checkers
+        },
+        // --- END OF ADDED FIELDS ---
     },
     { timestamps: true }
 );

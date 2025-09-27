@@ -212,6 +212,46 @@ export default function QuestionDetailPage() {
               </div>
             </div>
           </Section>
+          <Section title="Metadata">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+              <DetailItem label="Unit" value={question.unit} />
+              <DetailItem label="Chapter" value={question.chapter} />
+              {/* UPDATED: Added a button to view the question paper */}
+              <div>
+                <p className="text-sm font-semibold text-gray-500">
+                  Question Paper
+                </p>
+                <div className="flex items-center gap-4 mt-1">
+                  <p className="text-md text-gray-800">
+                    {question.questionPaper?.name || "N/A"}
+                  </p>
+                  {question.questionPaper?.url && (
+                    <button
+                      onClick={() =>
+                        window.open(question.questionPaper.url, "_blank")
+                      }
+                      className="bg-blue-100 text-blue-700 text-xs font-semibold px-3 py-1 rounded-full hover:bg-blue-200 transition"
+                    >
+                      View PDF
+                    </button>
+                  )}
+                </div>
+              </div>
+              <DetailItem
+                label="Question Number"
+                value={question.questionNumber}
+              />
+              <DetailItem label="Complexity" value={question.complexity} />
+              <DetailItem
+                label="Keywords"
+                value={
+                  Array.isArray(question.keywords)
+                    ? question.keywords.join(", ")
+                    : "N/A"
+                }
+              />
+            </div>
+          </Section>
 
           <Section title="Question">
             {question.question.image && (
@@ -278,47 +318,6 @@ export default function QuestionDetailPage() {
               </p>
             </Section>
           )}
-
-          <Section title="Metadata">
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
-              <DetailItem label="Unit" value={question.unit} />
-              <DetailItem label="Chapter" value={question.chapter} />
-              {/* UPDATED: Added a button to view the question paper */}
-              <div>
-                <p className="text-sm font-semibold text-gray-500">
-                  Question Paper
-                </p>
-                <div className="flex items-center gap-4 mt-1">
-                  <p className="text-md text-gray-800">
-                    {question.questionPaper?.name || "N/A"}
-                  </p>
-                  {question.questionPaper?.url && (
-                    <button
-                      onClick={() =>
-                        window.open(question.questionPaper.url, "_blank")
-                      }
-                      className="bg-blue-100 text-blue-700 text-xs font-semibold px-3 py-1 rounded-full hover:bg-blue-200 transition"
-                    >
-                      View PDF
-                    </button>
-                  )}
-                </div>
-              </div>
-              <DetailItem
-                label="Question Number"
-                value={question.questionNumber}
-              />
-              <DetailItem label="Complexity" value={question.complexity} />
-              <DetailItem
-                label="Keywords"
-                value={
-                  Array.isArray(question.keywords)
-                    ? question.keywords.join(", ")
-                    : "N/A"
-                }
-              />
-            </div>
-          </Section>
 
           <Section title="Review Information">
             <DetailItem
