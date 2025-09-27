@@ -1,10 +1,10 @@
 import { useState, useCallback, useEffect } from "react";
 import Cropper from "react-easy-crop";
 import Modal from "react-modal";
-import { getCroppedImg } from "../../utils/cropImage";
+import { getCroppedImg } from "../../utils/cropImage"; // Assuming this utility exists
 import axios from "axios";
 import { useParams, useNavigate } from "react-router-dom";
-import { host } from "../../utils/APIRoutes";
+import { host } from "../../utils/APIRoutes"; // Assuming this utility exists
 
 // Helper to get the correct URL for image previews (handles both File objects and URL strings)
 const getImagePreviewUrl = (image) => {
@@ -15,7 +15,7 @@ const getImagePreviewUrl = (image) => {
   return image; // It's already a URL string from the backend
 };
 
-// --- Sub-Components (can be moved to separate files later) ---
+// --- Sub-Components ---
 
 const SectionWrapper = ({ title, children }) => (
   <fieldset className="border border-gray-200 p-6 rounded-lg mb-6">
@@ -26,22 +26,81 @@ const SectionWrapper = ({ title, children }) => (
   </fieldset>
 );
 
-const QuestionMetadataInputs = ({ formData, handleInputChange }) => (
-  <SectionWrapper title="Question Details">
+// NEW: Component for Question Paper Details
+const QuestionPaperDetailsInputs = ({
+  formData,
+  handleInputChange,
+  questionPapers,
+}) => (
+  <SectionWrapper title="Question Paper Details">
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-      {["course", "grade", "subject", "chapter"].map((field) => (
+      <div>
+        <label className="block text-sm font-medium text-gray-600 mb-1">
+          Select Question Paper
+        </label>
+        <select
+          name="questionPaper"
+          value={formData.questionPaper}
+          onChange={handleInputChange}
+          className="border border-gray-300 px-3 py-2 rounded-md w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white"
+        >
+          <option value="">None</option>
+          {questionPapers.map((paper) => (
+            <option key={paper._id} value={paper._id}>
+              {paper.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-600 mb-1">
+          Question Number
+        </label>
+        <input
+          type="text"
+          name="questionNumber"
+          placeholder="e.g., 1a, II.3"
+          value={formData.questionNumber}
+          onChange={handleInputChange}
+          className="border border-gray-300 px-3 py-2 rounded-md w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+        />
+      </div>
+    </div>
+  </SectionWrapper>
+);
+
+const QuestionMetadataInputs = ({ formData, handleInputChange, courses }) => (
+  <SectionWrapper title="Question Classification">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {["course", "subject", "unit", "chapter"].map((field) => (
         <div key={field}>
           <label className="block text-sm font-medium text-gray-600 mb-1 capitalize">
             {field}
           </label>
-          <input
-            type="text"
-            name={field}
-            placeholder={`Enter ${field} name...`}
-            value={formData[field]}
-            onChange={handleInputChange}
-            className="border border-gray-300 px-3 py-2 rounded-md w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
-          />
+          {field === "course" ? (
+            <select
+              name="course"
+              value={formData.course}
+              onChange={handleInputChange}
+              className="border border-gray-300 px-3 py-2 rounded-md w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white"
+            >
+              <option value="">Select a course...</option>
+              {courses.map((course) => (
+                <option key={course._id} value={course.title}>
+                  {course.title}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              type="text"
+              name={field}
+              placeholder={`Enter ${field} name...`}
+              value={formData[field]}
+              onChange={handleInputChange}
+              className="border border-gray-300 px-3 py-2 rounded-md w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+            />
+          )}
         </div>
       ))}
     </div>
@@ -55,32 +114,54 @@ const ContentInputSection = ({
   imageValue,
   onTextChange,
   onFileChange,
-}) => (
-  <SectionWrapper title={label}>
-    <textarea
-      name={textName}
-      placeholder={`${label} content...`}
-      value={textValue}
-      onChange={onTextChange}
-      className="border border-gray-300 px-3 py-2 rounded-md w-full h-28 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
-    />
-    <div className="flex items-center gap-4">
-      <input
-        type="file"
-        accept="image/*"
-        onChange={onFileChange}
-        className="text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
+  onRemoveImage,
+}) => {
+  const fileInputId = `${textName}-file-input`;
+
+  return (
+    <SectionWrapper title={label}>
+      <textarea
+        name={textName}
+        placeholder={`${label} content...`}
+        value={textValue}
+        onChange={onTextChange}
+        className="border border-gray-300 px-3 py-2 rounded-md w-full h-28 focus:ring-2 focus:ring-blue-500 transition"
       />
-      {imageValue && (
-        <img
-          src={getImagePreviewUrl(imageValue)}
-          alt={`${label} Preview`}
-          className="rounded-md h-24 w-auto object-contain border p-1"
+      <div className="flex items-center gap-4">
+        <input
+          id={fileInputId}
+          type="file"
+          accept="image/*"
+          onChange={onFileChange}
+          className="hidden"
         />
-      )}
-    </div>
-  </SectionWrapper>
-);
+        <label
+          htmlFor={fileInputId}
+          className="cursor-pointer bg-blue-50 text-blue-700 font-semibold text-sm px-4 py-2 rounded-full hover:bg-blue-100 transition"
+        >
+          {`Upload ${label} Diagram`}
+        </label>
+        {imageValue && (
+          <div className="relative">
+            <img
+              src={getImagePreviewUrl(imageValue)}
+              alt={`${label} Preview`}
+              className="rounded-md h-24 w-auto object-contain border p-1"
+            />
+            <button
+              type="button"
+              onClick={onRemoveImage}
+              className="absolute top-0 right-0 -mt-2 -mr-2 bg-red-500 text-white rounded-full h-5 w-5 flex items-center justify-center text-xs font-bold hover:bg-red-700 transition"
+              aria-label="Remove image"
+            >
+              &times;
+            </button>
+          </div>
+        )}
+      </div>
+    </SectionWrapper>
+  );
+};
 
 const ChoicesSection = ({
   choices,
@@ -90,57 +171,98 @@ const ChoicesSection = ({
   handleFileChange,
   removeChoice,
   addChoice,
+  onRemoveChoiceImage,
 }) => (
   <SectionWrapper title="Answer Choices">
     <div className="space-y-4">
-      {choices.map((choice, index) => (
-        <div
-          key={index}
-          className="flex items-start gap-4 border p-4 rounded-md bg-gray-50"
-        >
-          <input
-            type="radio"
-            name="correctAnswer"
-            checked={correctAnswer === index}
-            onChange={() =>
-              setFormData((prev) => ({ ...prev, correctAnswer: index }))
-            }
-            className="mt-2.5 h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300"
-          />
-          <div className="flex-grow space-y-3">
-            <input
-              type="text"
-              placeholder={`Choice ${index + 1} text`}
-              value={choice.text}
-              onChange={(e) => handleChoiceChange(index, e.target.value)}
-              className="border border-gray-300 px-3 py-2 rounded-md w-full"
-            />
-            <div className="flex items-center gap-4">
+      {choices.map((choice, index) => {
+        const choiceFileInputId = `choice-image-input-${index}`;
+        return (
+          <div
+            key={index}
+            className="flex items-start gap-4 border p-4 rounded-md bg-gray-50"
+          >
+            <span className="text-gray-500 font-semibold mt-2.5">
+              {index + 1}.
+            </span>
+            <div className="flex-grow space-y-3">
               <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => handleFileChange(e, "choiceImage", index)}
-                className="text-sm text-gray-500 file:mr-2 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200 cursor-pointer"
+                type="text"
+                placeholder={`Choice ${index + 1} text`}
+                value={choice.text}
+                onChange={(e) => handleChoiceChange(index, e.target.value)}
+                className="border border-gray-300 px-3 py-2 rounded-md w-full"
               />
-              {choice.image && (
-                <img
-                  src={getImagePreviewUrl(choice.image)}
-                  alt={`Choice ${index + 1} Preview`}
-                  className="rounded h-16 w-auto object-contain border p-1"
+              <div className="flex items-center gap-4">
+                <input
+                  id={choiceFileInputId}
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleFileChange(e, "choiceImage", index)}
+                  className="hidden"
                 />
-              )}
+                <label
+                  htmlFor={choiceFileInputId}
+                  className="cursor-pointer bg-gray-100 text-gray-700 font-semibold text-sm px-3 py-1 rounded-full hover:bg-gray-200 transition"
+                >
+                  Upload Choice diagram
+                </label>
+                {choice.image && (
+                  <div className="relative">
+                    <img
+                      src={getImagePreviewUrl(choice.image)}
+                      alt={`Choice ${index + 1} Preview`}
+                      className="rounded h-16 w-auto object-contain border p-1"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => onRemoveChoiceImage(index)}
+                      className="absolute top-0 right-0 -mt-2 -mr-2 bg-red-500 text-white rounded-full h-5 w-5 flex items-center justify-center text-xs font-bold hover:bg-red-700 transition"
+                      aria-label="Remove choice image"
+                    >
+                      &times;
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
+            {choices.length > 2 && (
+              <button
+                onClick={() => removeChoice(index)}
+                className="bg-red-500 text-white px-3 py-1 rounded-md hover:bg-red-600 self-center text-sm"
+              >
+                Remove
+              </button>
+            )}
           </div>
-          {choices.length > 2 && (
-            <button
-              onClick={() => removeChoice(index)}
-              className="bg-red-500 text-white px-3 py-1 rounded-md hover:bg-red-600 self-center text-sm"
-            >
-              Remove
-            </button>
-          )}
-        </div>
-      ))}
+        );
+      })}
+    </div>
+    <div className="mt-6 pt-4 border-t">
+      <label
+        htmlFor="correct-answer-select"
+        className="block text-sm font-medium text-gray-700 mb-2"
+      >
+        Select Correct Answer
+      </label>
+      <select
+        id="correct-answer-select"
+        value={correctAnswer}
+        onChange={(e) =>
+          setFormData((prev) => ({
+            ...prev,
+            correctAnswer: parseInt(e.target.value, 10),
+          }))
+        }
+        className="border border-gray-300 px-3 py-2 rounded-md w-full sm:w-1/2 focus:ring-2 focus:ring-blue-500"
+      >
+        <option value={-1}>None (No correct answer)</option>
+        {choices.map((_, index) => (
+          <option key={index} value={index}>
+            Option {index + 1}
+          </option>
+        ))}
+      </select>
     </div>
     <button
       onClick={addChoice}
@@ -219,18 +341,24 @@ export default function CreateQuestion() {
   const { id } = useParams();
   const navigate = useNavigate();
 
+  // UPDATED: Added questionPaper and questionNumber to initial state
   const initialFormData = {
     course: "",
-    grade: "",
     subject: "",
+    unit: "",
     chapter: "",
+    questionPaper: "",
+    questionNumber: "",
+    FrequentlyAsked: false,
     questionText: "",
     questionImage: null,
     choices: [
       { text: "", image: null },
       { text: "", image: null },
+      { text: "", image: null },
+      { text: "", image: null },
     ],
-    correctAnswer: 0,
+    correctAnswer: -1,
     explanation: "",
     explanationImage: null,
     complexity: "Easy",
@@ -239,6 +367,8 @@ export default function CreateQuestion() {
   };
 
   const [formData, setFormData] = useState(initialFormData);
+  const [courses, setCourses] = useState([]);
+  const [questionPapers, setQuestionPapers] = useState([]); // ADDED: State for claimed papers
   const [cropModal, setCropModal] = useState({
     open: false,
     src: null,
@@ -250,6 +380,38 @@ export default function CreateQuestion() {
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
   const [loading, setLoading] = useState(false);
 
+  // Fetch courses and claimed question papers on component mount
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+
+    const fetchCourses = async () => {
+      try {
+        const res = await axios.get(`${host}/api/questions/all`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setCourses(res.data);
+      } catch (err) {
+        console.error("Failed to fetch courses:", err);
+      }
+    };
+
+    const fetchClaimedPapers = async () => {
+      try {
+        // ASSUMPTION: This endpoint returns question papers claimed by the logged-in maker
+        const res = await axios.get(`${host}/api/questions/papers/makerclaimed`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setQuestionPapers(res.data);
+      } catch (err) {
+        console.error("Failed to fetch claimed question papers:", err);
+      }
+    };
+
+    fetchCourses();
+    fetchClaimedPapers();
+  }, []);
+
+  // Fetch existing question data if editing
   useEffect(() => {
     if (id) {
       setLoading(true);
@@ -261,31 +423,28 @@ export default function CreateQuestion() {
           });
 
           const q = res.data;
-
-          // --- CORRECTED LOGIC ---
-          // Determine the choices array based on fetched data, with a fresh default.
           const choicesForForm =
             q.options && q.options.length > 0
               ? q.options.map((opt) => ({
                   text: opt.text || "",
                   image: opt.image || null,
                 }))
-              : [
-                  // Use a new default array, not the one from the initial state
-                  { text: "", image: null },
-                  { text: "", image: null },
-                ];
+              : initialFormData.choices;
 
+          // UPDATED: Populate all fields, including new ones
           setFormData({
             _id: q._id,
-            course: q.course || "",
-            grade: q.grade || "",
+            course: q.course?.title || "", 
             subject: q.subject || "",
+            unit: q.unit || "",
             chapter: q.chapter || "",
+            questionPaper: q.questionPaper?._id || "", 
+            questionNumber: q.questionNumber || "",
+            FrequentlyAsked: q.FrequentlyAsked || false,
             questionText: q.question?.text || "",
             questionImage: q.question?.image || null,
-            choices: choicesForForm, // Use our newly created, correct array
-            correctAnswer: q.options?.findIndex((opt) => opt.isCorrect) ?? 0,
+            choices: choicesForForm,
+            correctAnswer: q.options?.findIndex((opt) => opt.isCorrect) ?? -1,
             explanation: q.explanation?.text || "",
             explanationImage: q.explanation?.image || null,
             complexity: q.complexity || "Easy",
@@ -294,15 +453,12 @@ export default function CreateQuestion() {
           });
         } catch (err) {
           console.error("Error loading draft", err);
-          alert("Failed to load draft.");
         } finally {
           setLoading(false);
         }
       };
       fetchDraft();
     }
-    // We add initialFormData to dependencies to avoid stale closures,
-    // but since it's stable, it won't cause re-fetches.
   }, [id]);
 
   const onCropComplete = useCallback((_, croppedAreaPixels) => {
@@ -310,13 +466,15 @@ export default function CreateQuestion() {
   }, []);
 
   const handleInputChange = useCallback((e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    const { name, value, type, checked } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: type === "checkbox" ? checked : value,
+    }));
   }, []);
 
   const handleChoiceChange = useCallback((index, value) => {
     setFormData((prev) => {
-      // Create a new array and update the specific item immutably
       const updatedChoices = prev.choices.map((choice, i) =>
         i === index ? { ...choice, text: value } : choice
       );
@@ -334,18 +492,12 @@ export default function CreateQuestion() {
   const removeChoice = useCallback((index) => {
     setFormData((prev) => {
       const updatedChoices = prev.choices.filter((_, i) => i !== index);
-
-      // --- CORRECTED LOGIC FOR correctAnswer ---
-      // If the removed choice was the correct one, reset to the first choice.
-      // If a choice after the correct one was removed, the index is still valid.
-      // If a choice before the correct one was removed, decrement the index.
       let newCorrectAnswer = prev.correctAnswer;
       if (index === prev.correctAnswer) {
-        newCorrectAnswer = 0;
+        newCorrectAnswer = -1;
       } else if (index < prev.correctAnswer) {
         newCorrectAnswer = prev.correctAnswer - 1;
       }
-
       return {
         ...prev,
         choices: updatedChoices,
@@ -396,6 +548,20 @@ export default function CreateQuestion() {
     }
   }, [cropModal, croppedAreaPixels]);
 
+    const handleRemoveImage = useCallback((fieldName) => {
+      setFormData((prev) => ({ ...prev, [fieldName]: null }));
+    }, []);
+
+    const handleRemoveChoiceImage = useCallback((index) => {
+      setFormData((prev) => {
+        const updatedChoices = prev.choices.map((choice, i) =>
+          i === index ? { ...choice, image: null } : choice
+        );
+        return { ...prev, choices: updatedChoices };
+      });
+    }, []);
+
+
   const handleSubmit = useCallback(
     async (type) => {
       setLoading(true);
@@ -403,6 +569,7 @@ export default function CreateQuestion() {
         const formPayload = new FormData();
         if (formData._id) formPayload.append("_id", formData._id);
 
+        // Append all fields except images and choices
         Object.keys(formData).forEach((key) => {
           if (
             ![
@@ -413,6 +580,8 @@ export default function CreateQuestion() {
             ].includes(key) &&
             formData[key] !== null
           ) {
+            // Append questionPaper only if it has a value
+            if (key === "questionPaper" && !formData[key]) return;
             formPayload.append(key, formData[key]);
           }
         });
@@ -458,7 +627,7 @@ export default function CreateQuestion() {
           },
         });
 
-        alert(
+        console.log(
           `Question ${
             type === "Draft" ? "saved as draft" : "submitted"
           } successfully!`
@@ -467,7 +636,6 @@ export default function CreateQuestion() {
         navigate("/maker/drafts");
       } catch (err) {
         console.error("Error submitting question:", err);
-        alert("An error occurred while saving the question.");
       } finally {
         setLoading(false);
       }
@@ -475,9 +643,10 @@ export default function CreateQuestion() {
     [formData, navigate]
   );
 
+  console.log(formData)
   return (
-    <div className="bg-gray-50 min-h-screen">
-      <div className="max-w-5xl p-8 bg-white rounded-xl shadow-lg relative">
+    <div className="bg-gray-50 min-h-screen p-4 sm:p-8">
+      <div className="max-w-5xl mx-auto p-6 sm:p-8 bg-white rounded-xl shadow-lg relative">
         <h1 className="text-3xl font-bold mb-2 text-gray-800">
           {id ? "Edit Question" : "Create New Question"}
         </h1>
@@ -492,9 +661,17 @@ export default function CreateQuestion() {
         )}
 
         <form onSubmit={(e) => e.preventDefault()}>
+          {/* ADDED the new component here */}
+          <QuestionPaperDetailsInputs
+            formData={formData}
+            handleInputChange={handleInputChange}
+            questionPapers={questionPapers}
+          />
+
           <QuestionMetadataInputs
             formData={formData}
             handleInputChange={handleInputChange}
+            courses={courses}
           />
           <ContentInputSection
             label="Question"
@@ -503,6 +680,7 @@ export default function CreateQuestion() {
             imageValue={formData.questionImage}
             onTextChange={handleInputChange}
             onFileChange={(e) => handleFileChange(e, "questionImage")}
+            onRemoveImage={() => handleRemoveImage("questionImage")}
           />
           <ChoicesSection
             choices={formData.choices}
@@ -512,6 +690,7 @@ export default function CreateQuestion() {
             handleFileChange={handleFileChange}
             removeChoice={removeChoice}
             addChoice={addChoice}
+            onRemoveChoiceImage={handleRemoveChoiceImage}
           />
           <ContentInputSection
             label="Explanation"
@@ -529,10 +708,9 @@ export default function CreateQuestion() {
                   Complexity
                 </label>
                 <select
+                  name="complexity"
                   value={formData.complexity}
-                  onChange={(e) =>
-                    setFormData({ ...formData, complexity: e.target.value })
-                  }
+                  onChange={handleInputChange}
                   className="border border-gray-300 px-3 py-2 rounded-md w-full focus:ring-2 focus:ring-blue-500"
                 >
                   <option>Easy</option>
@@ -553,6 +731,20 @@ export default function CreateQuestion() {
                   className="border border-gray-300 px-3 py-2 rounded-md w-full focus:ring-2 focus:ring-blue-500"
                 />
               </div>
+            </div>
+            <div className="mt-4">
+              <label className="flex items-center space-x-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  name="FrequentlyAsked"
+                  checked={formData.FrequentlyAsked}
+                  onChange={handleInputChange}
+                  className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-sm font-medium text-gray-700">
+                  Mark as a frequently asked question
+                </span>
+              </label>
             </div>
           </SectionWrapper>
 

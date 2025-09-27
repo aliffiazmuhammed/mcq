@@ -2,15 +2,29 @@ import Question from "../models/Question.js";
 import { QUESTION_STATUS } from "../constants/roles.js";
 import cloudinary from "../config/cloudinary.js"; 
 import QuestionPaper from "../models/QuestionPaper.js";
+import Course from "../models/Course.js"
+import mongoose from 'mongoose';
 
 const createOrUpdateQuestion = async (req, res) => {
     try {
         const {
-            _id, course, grade, subject, chapter, questionText,
+            _id, course, unit, subject, chapter, questionText,
+            questionPaper, questionNumber, // Destructure new fields
             correctAnswer, explanation, complexity, keywords, status,
-            // When editing, we receive existing image URLs
             existingQuestionImage, existingExplanationImage, existingReferenceImage, existingChoiceImages
         } = req.body;
+
+        // --- Find Course ID from title ---
+        let courseId;
+        if (mongoose.Types.ObjectId.isValid(course)) {
+            courseId = course;
+        } else {
+            const courseDoc = await Course.findOne({ title: course });
+            if (!courseDoc) {
+                return res.status(400).json({ message: `Invalid course provided: "${course}" not found.` });
+            }
+            courseId = courseDoc._id;
+        }
 
         const uploadToCloudinary = async (file) => {
             if (!file) return null;
@@ -24,10 +38,6 @@ const createOrUpdateQuestion = async (req, res) => {
             }
         };
 
-        // --- CORRECTED MAIN IMAGE LOGIC ---
-        // 1. If a new file exists, upload it.
-        // 2. If not, use the existing image URL sent from the frontend.
-        // 3. If neither exist, it will be null.
         const questionImage = req.files?.questionImage
             ? await uploadToCloudinary(req.files.questionImage[0])
             : (existingQuestionImage || null);
@@ -40,7 +50,6 @@ const createOrUpdateQuestion = async (req, res) => {
             ? await uploadToCloudinary(req.files.referenceImage[0])
             : (existingReferenceImage || null);
 
-        // --- CHOICES LOGIC (Already Correct) ---
         let choiceTexts = req.body.choicesText || [];
         if (!Array.isArray(choiceTexts)) choiceTexts = [choiceTexts];
 
@@ -56,7 +65,6 @@ const createOrUpdateQuestion = async (req, res) => {
         let fileCounter = 0;
         const finalImageUrls = hasImageFlags.map((hasImage, i) => {
             if (hasImage !== 'true') return null;
-
             if (existingImages[i]) {
                 return existingImages[i];
             } else {
@@ -70,10 +78,10 @@ const createOrUpdateQuestion = async (req, res) => {
             isCorrect: Number(correctAnswer) === i,
         }));
 
-        // --- END OF CHOICES LOGIC ---
-
+        // --- UPDATED: Construct questionData with new optional fields ---
         const questionData = {
-            course, grade, subject, chapter,
+            course: courseId,
+            unit, subject, chapter,
             question: { text: questionText || "", image: questionImage },
             options: mappedChoices,
             explanation: { text: explanation || "", image: explanationImage },
@@ -83,6 +91,16 @@ const createOrUpdateQuestion = async (req, res) => {
             status: status || 'Draft',
             maker: req.user._id,
         };
+
+        // Add optional fields only if they have a value. This prevents saving
+        // empty strings for fields that should be null or non-existent.
+        if (questionPaper) {
+            questionData.questionPaper = questionPaper;
+        }
+        if (questionNumber) {
+            questionData.questionNumber = questionNumber;
+        }
+        // --- END OF UPDATE ---
 
         let question;
         if (_id) {
@@ -98,42 +116,24 @@ const createOrUpdateQuestion = async (req, res) => {
         }
     } catch (err) {
         console.error("Error in createOrUpdateQuestion:", err);
-        res.status(500).json({ message: "Server error" });
+        res.status(500).json({ message: "Server error", error: err.message });
     }
 };
 
-
 const getQuestionById = async (req, res) => {
     try {
-        const { id } = req.params; // Get the question ID from the URL
-        const userId = req.user._id; // Get the logged-in user's ID
-        const userRole = req.user.role; // Get the logged-in user's role
-
-        // 1. Find the question by its ID
-        const question = await Question.findById(id);
-        console.log(question)
+        const question = await Question.findById(req.params.id)
+            .populate('course', 'title') // Populates 'course' and selects only the 'title' field
+            .populate('questionPaper', 'name'); // Populates 'questionPaper' and selects the 'name'
 
         if (!question) {
             return res.status(404).json({ message: "Question not found" });
         }
 
-        // 2. Check for authorization
-        const isOwner = question.maker.toString() === userId.toString();
-
-        // You can add other roles that are allowed to view any question here
-        const isAuthorizedRole = userRole === 'checker' || userRole === 'admin';
-
-        // 3. Deny access if the user is NOT the owner AND does NOT have an authorized role
-        if (!isOwner && !isAuthorizedRole) {
-            return res.status(403).json({ message: "Access denied. You are not authorized to view this question." });
-        }
-
-        // 4. If authorized, send the question data
-        return res.json(question);
-
+        res.json(question);
     } catch (err) {
         console.error("Error fetching question by ID:", err);
-        return res.status(500).json({ message: "Server error" });
+        res.status(500).json({ message: "Server error", error: err.message });
     }
 };
 
@@ -350,4 +350,50 @@ const getClaimedPapers = async (req, res) => {
     }
 };
 
-export { createOrUpdateQuestion, getQuestionById, getDraftQuestions, deleteQuestions, submitQuestionsForApproval, getSubmittedQuestions , getAvailablePapers,claimPaper,getClaimedPapers};
+const getAllCourses = async (req, res) => {
+    try {
+        // Find all courses with an "Active" status to populate the dropdown.
+        // .sort({ title: 1 }) sorts them alphabetically by title.
+        // .select('title') ensures you only fetch the title field for efficiency.
+        const courses = await Course.find({ status: "Active" })
+            .sort({ title: 1 })
+            .select("title");
+
+        // Send the list of courses back as a JSON response.
+        res.status(200).json(courses);
+
+    } catch (error) {
+        // Log the error for debugging purposes.
+        console.error("Error fetching courses:", error);
+
+        // Send a generic server error response to the client.
+        res.status(500).json({ message: "Server error, could not fetch courses." });
+    }
+};
+
+const getClaimedPapersByMaker = async (req, res) => {
+    try {
+        // req.user._id is populated by your authentication middleware
+        const makerId = req.user._id;
+
+        if (!makerId) {
+            return res.status(401).json({ message: "Not authorized, no user ID found." });
+        }
+
+        // Find all question papers where the 'usedBy' field matches the maker's ID
+        const claimedPapers = await QuestionPaper.find({ usedBy: makerId });
+
+        if (!claimedPapers) {
+            // This case is unlikely with .find(), which returns [] if nothing is found,
+            // but it's good practice to handle it.
+            return res.status(404).json({ message: "No claimed question papers found for this user." });
+        }
+
+        res.status(200).json(claimedPapers);
+    } catch (err) {
+        console.error("Error fetching claimed question papers:", err);
+        res.status(500).json({ message: "Server error while fetching papers", error: err.message });
+    }
+};
+
+export { createOrUpdateQuestion, getQuestionById, getDraftQuestions, deleteQuestions, submitQuestionsForApproval, getSubmittedQuestions , getAvailablePapers,claimPaper,getClaimedPapers,getAllCourses,getClaimedPapersByMaker};
