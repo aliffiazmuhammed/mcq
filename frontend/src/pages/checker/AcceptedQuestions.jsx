@@ -2,8 +2,7 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { host } from "../../utils/APIRoutes";
-
-// --- Helper Components ---
+// --- Reusable Helper Components ---
 
 const StatusBadge = ({ status }) => {
   const statusStyles = {
@@ -21,6 +20,30 @@ const StatusBadge = ({ status }) => {
   );
 };
 
+const ImageModal = ({ src, onClose }) => {
+  if (!src) return null;
+  return (
+    <div
+      className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-75 z-50 p-4"
+      onClick={onClose}
+    >
+      <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full p-4 relative">
+        <button
+          onClick={onClose}
+          className="absolute -top-4 -right-4 text-3xl text-white font-bold"
+        >
+          &times;
+        </button>
+        <img
+          src={src}
+          alt="Full size content"
+          className="rounded-lg w-full h-auto max-h-[80vh] object-contain"
+        />
+      </div>
+    </div>
+  );
+};
+
 // --- Main Component ---
 
 export default function AcceptedQuestions() {
@@ -28,7 +51,8 @@ export default function AcceptedQuestions() {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  // State for filters
+  // State for modals and filters
+  const [imageModalSrc, setImageModalSrc] = useState(null);
   const [filterStatus, setFilterStatus] = useState("All");
   const [filterMaker, setFilterMaker] = useState("All");
   const [filterCourse, setFilterCourse] = useState("All");
@@ -50,28 +74,28 @@ export default function AcceptedQuestions() {
     fetchReviewed();
   }, []);
 
-  // Deriving unique values for filter dropdowns
+  // Deriving unique values for filter dropdowns from populated data
   const makers = [
     "All",
     ...new Set(questions.map((q) => q.maker?.name).filter(Boolean)),
   ];
   const courses = [
     "All",
-    ...new Set(questions.map((q) => q.course).filter(Boolean)),
+    ...new Set(questions.map((q) => q.course?.title).filter(Boolean)),
   ];
 
-  // Apply filters to the questions list
+  // UPDATED: Apply filters to the questions list using populated data
   const filteredQuestions = questions.filter((q) => {
     const matchesStatus = filterStatus === "All" || q.status === filterStatus;
     const matchesMaker = filterMaker === "All" || q.maker?.name === filterMaker;
-    const matchesCourse = filterCourse === "All" || q.course === filterCourse;
+    const matchesCourse =
+      filterCourse === "All" || q.course?.title === filterCourse;
     return matchesStatus && matchesMaker && matchesCourse;
   });
 
   return (
     <div className="bg-gray-50 min-h-screen">
       <div className="max-w-7xl mx-auto p-4 sm:p-6">
-        {/* --- Header & Filters --- */}
         <div className="bg-white p-6 rounded-lg shadow-md mb-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
             <h1 className="text-3xl font-bold text-gray-800">
@@ -131,7 +155,6 @@ export default function AcceptedQuestions() {
           </div>
         </div>
 
-        {/* --- Main Content: Questions Table --- */}
         {loading ? (
           <div className="flex justify-center items-center h-60">
             <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
@@ -144,6 +167,7 @@ export default function AcceptedQuestions() {
                   <th className="p-4">Question</th>
                   <th className="p-4">Maker</th>
                   <th className="p-4">Course</th>
+                  <th className="p-4">Question Paper</th>
                   <th className="p-4">Status</th>
                   <th className="p-4 text-center">Actions</th>
                 </tr>
@@ -154,28 +178,29 @@ export default function AcceptedQuestions() {
                     key={q._id}
                     className="bg-white border-b hover:bg-gray-50"
                   >
-                    <td className="p-4 font-medium text-gray-900">
-                      <div className="flex items-center gap-3">
-                        {q.question.image && (
-                          <img
-                            src={q.question.image}
-                            alt="Q"
-                            className="h-10 w-16 object-contain rounded border"
-                          />
-                        )}
-                        <span className="line-clamp-2">
-                          {q.question.text || "No text"}
-                        </span>
-                      </div>
+                    <td className="p-4 font-medium text-gray-900 max-w-xs">
+                      <span className="line-clamp-2 block mb-2">
+                        {q.question.text || "No text"}
+                      </span>
+
+                      {q.question.image && (
+                        <img
+                          src={q.question.image}
+                          alt="Q"
+                          className="h-10 w-16 object-contain rounded border cursor-pointer"
+                          onClick={() => setImageModalSrc(q.question.image)}
+                        />
+                      )}
                     </td>
                     <td className="p-4">{q.maker?.name || "N/A"}</td>
-                    <td className="p-4">{q.course || "N/A"}</td>
+                    <td className="p-4">{q.course?.title || "N/A"}</td>
+                    <td className="p-4">{q.questionPaper?.name || "N/A"}</td>
                     <td className="p-4">
                       <StatusBadge status={q.status} />
                     </td>
                     <td className="p-4 text-center">
                       <button
-                        onClick={() => navigate(`/checker/details/${q._id}`)} // Navigate on click
+                        onClick={() => navigate(`/checker/details/${q._id}`)}
                         className="font-medium text-blue-600 hover:underline"
                       >
                         View Details
@@ -185,7 +210,7 @@ export default function AcceptedQuestions() {
                 ))}
                 {filteredQuestions.length === 0 && (
                   <tr>
-                    <td colSpan="5" className="text-center p-10 text-gray-500">
+                    <td colSpan="6" className="text-center p-10 text-gray-500">
                       No reviewed questions match your filters.
                     </td>
                   </tr>
@@ -195,6 +220,7 @@ export default function AcceptedQuestions() {
           </div>
         )}
       </div>
+      <ImageModal src={imageModalSrc} onClose={() => setImageModalSrc(null)} />
     </div>
   );
 }

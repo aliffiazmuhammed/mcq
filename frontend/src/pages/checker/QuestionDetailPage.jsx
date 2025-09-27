@@ -1,7 +1,50 @@
 import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { useParams, useNavigate } from "react-router-dom";
- import { host } from "../../utils/APIRoutes";
+import { host } from "../../utils/APIRoutes";
+// --- Reusable Modal Components ---
+
+const ConfirmationModal = ({ isOpen, onClose, onConfirm, message }) => {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-60 z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-sm w-full p-6 text-center">
+        <h2 className="text-lg font-semibold text-gray-800 mb-4">{message}</h2>
+        <div className="flex justify-center gap-4">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 rounded-md bg-gray-200 text-gray-800 hover:bg-gray-300 font-semibold"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="px-4 py-2 rounded-md bg-green-600 text-white hover:bg-green-700 font-semibold"
+          >
+            Confirm
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const NotificationModal = ({ isOpen, onClose, message }) => {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-60 z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-sm w-full p-6 text-center">
+        <p className="text-gray-800 mb-4">{message}</p>
+        <button
+          onClick={onClose}
+          className="px-6 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 font-semibold"
+        >
+          OK
+        </button>
+      </div>
+    </div>
+  );
+};
 
 // --- Helper Components ---
 
@@ -17,7 +60,7 @@ const Section = ({ title, children, className = "" }) => (
 const DetailItem = ({ label, value }) => (
   <div>
     <p className="text-sm font-semibold text-gray-500">{label}</p>
-    <p className="text-md text-gray-800">{value || "N/A"}</p>
+    <p className="text-md text-gray-800 break-words">{value || "N/A"}</p>
   </div>
 );
 
@@ -26,7 +69,6 @@ const StatusBadge = ({ status }) => {
     Approved: "bg-green-100 text-green-800",
     Rejected: "bg-red-100 text-red-800",
     Pending: "bg-yellow-100 text-yellow-800",
-    Draft: "bg-gray-100 text-gray-700",
   };
   return (
     <span
@@ -45,9 +87,20 @@ export default function QuestionDetailPage() {
   const [question, setQuestion] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [comment, setComment] = useState(""); // State for the rejection comment
+  const [comment, setComment] = useState("");
   const { id } = useParams();
   const navigate = useNavigate();
+
+  // State for modals
+  const [confirmation, setConfirmation] = useState({
+    isOpen: false,
+    message: "",
+    onConfirm: () => {},
+  });
+  const [notification, setNotification] = useState({
+    isOpen: false,
+    message: "",
+  });
 
   useEffect(() => {
     const fetchQuestion = async () => {
@@ -55,7 +108,6 @@ export default function QuestionDetailPage() {
       setLoading(true);
       try {
         const token = localStorage.getItem("token");
-        // This endpoint needs to be authorized for checkers
         const res = await axios.get(`${host}/api/checker/questions/${id}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -72,77 +124,72 @@ export default function QuestionDetailPage() {
     fetchQuestion();
   }, [id]);
 
-  // --- Action Handlers ---
-
-  const handleApprove = useCallback(async () => {
-    if (!window.confirm("Are you sure you want to approve this question?"))
-      return;
-
-    try {
+  const handleAction = useCallback(
+    async (action) => {
       const token = localStorage.getItem("token");
-      await axios.put(
-        `${host}/api/checker/questions/${id}/approve`,
-        {},
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      alert("Question approved successfully!");
-      navigate(-1); // Go back to the previous page
-    } catch (err) {
-      console.error("Error approving question:", err);
-      alert("Failed to approve the question.");
-    }
-  }, [id, navigate]);
+      const url = `${host}/api/checker/questions/${id}/${action}`;
+      const payload = action === "reject" ? { comments: comment } : {};
 
-  const handleReject = useCallback(async () => {
+      try {
+        await axios.put(url, payload, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setNotification({
+          isOpen: true,
+          message: `Question ${action}ed successfully!`,
+        });
+      } catch (err) {
+        console.error(`Error ${action}ing question:`, err);
+        setNotification({
+          isOpen: true,
+          message: `Failed to ${action} the question.`,
+        });
+      }
+      setConfirmation({ isOpen: false, message: "", onConfirm: () => {} });
+    },
+    [id, comment]
+  );
+
+  const onApprove = () =>
+    setConfirmation({
+      isOpen: true,
+      message: "Are you sure you want to approve this question?",
+      onConfirm: () => handleAction("approve"),
+    });
+
+  const onReject = () => {
     if (!comment.trim()) {
-      alert("Please provide a comment before rejecting.");
+      setNotification({
+        isOpen: true,
+        message: "Please provide a comment before rejecting.",
+      });
       return;
     }
-    if (!window.confirm("Are you sure you want to reject this question?"))
-      return;
+    setConfirmation({
+      isOpen: true,
+      message: "Are you sure you want to reject this question?",
+      onConfirm: () => handleAction("reject"),
+    });
+  };
 
-    try {
-      const token = localStorage.getItem("token");
-      await axios.put(
-        `${host}/api/checker/questions/${id}/reject`,
-        { comments: comment },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      alert("Question rejected successfully!");
-      navigate(-1); // Go back to the previous page
-    } catch (err) {
-      console.error("Error rejecting question:", err);
-      alert("Failed to reject the question.");
-    }
-  }, [id, comment, navigate]);
-
-  if (loading) {
+  if (loading)
     return (
       <div className="flex justify-center items-center h-screen">
         <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
       </div>
     );
-  }
-
-  if (error) {
+  if (error)
     return (
       <div className="text-center py-20 text-red-600 font-semibold">
         {error}
       </div>
     );
-  }
-
-  if (!question) {
+  if (!question)
     return (
       <div className="text-center py-20 text-gray-500">
         No question data found.
       </div>
     );
-  }
 
   return (
     <div className="bg-gray-50 min-h-screen p-4 sm:p-8">
@@ -155,11 +202,10 @@ export default function QuestionDetailPage() {
             &larr; Back to List
           </button>
         </div>
-
         <div className="space-y-6">
-          {/* Header Section */}
           <Section title="Question Overview">
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+              <DetailItem label="Course" value={question.course?.title} />
               <DetailItem label="Subject" value={question.subject} />
               <div className="flex-shrink-0">
                 <StatusBadge status={question.status} />
@@ -167,7 +213,6 @@ export default function QuestionDetailPage() {
             </div>
           </Section>
 
-          {/* Question Content Section */}
           <Section title="Question">
             {question.question.image && (
               <img
@@ -181,7 +226,6 @@ export default function QuestionDetailPage() {
             </p>
           </Section>
 
-          {/* Options Section */}
           <Section title="Options">
             <ul className="space-y-3">
               {question.options.map((opt, idx) => (
@@ -220,7 +264,6 @@ export default function QuestionDetailPage() {
             </ul>
           </Section>
 
-          {/* Explanation Section */}
           {question.explanation?.text && (
             <Section title="Explanation">
               {question.explanation.image && (
@@ -236,12 +279,35 @@ export default function QuestionDetailPage() {
             </Section>
           )}
 
-          {/* Metadata Section */}
           <Section title="Metadata">
             <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
-              <DetailItem label="Course" value={question.course} />
-              <DetailItem label="Grade" value={question.grade} />
+              <DetailItem label="Unit" value={question.unit} />
               <DetailItem label="Chapter" value={question.chapter} />
+              {/* UPDATED: Added a button to view the question paper */}
+              <div>
+                <p className="text-sm font-semibold text-gray-500">
+                  Question Paper
+                </p>
+                <div className="flex items-center gap-4 mt-1">
+                  <p className="text-md text-gray-800">
+                    {question.questionPaper?.name || "N/A"}
+                  </p>
+                  {question.questionPaper?.url && (
+                    <button
+                      onClick={() =>
+                        window.open(question.questionPaper.url, "_blank")
+                      }
+                      className="bg-blue-100 text-blue-700 text-xs font-semibold px-3 py-1 rounded-full hover:bg-blue-200 transition"
+                    >
+                      View PDF
+                    </button>
+                  )}
+                </div>
+              </div>
+              <DetailItem
+                label="Question Number"
+                value={question.questionNumber}
+              />
               <DetailItem label="Complexity" value={question.complexity} />
               <DetailItem
                 label="Keywords"
@@ -254,18 +320,11 @@ export default function QuestionDetailPage() {
             </div>
           </Section>
 
-          {/* Review Information Section */}
           <Section title="Review Information">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              <DetailItem
-                label="Created By (Maker)"
-                value={question.maker?.name}
-              />
-              <DetailItem
-                label="Reviewed By (Checker)"
-                value={question.checkedBy?.name}
-              />
-            </div>
+            <DetailItem
+              label="Created By (Maker)"
+              value={question.maker?.name}
+            />
             {question.status === "Rejected" && (
               <div className="mt-4">
                 <p className="text-sm font-semibold text-gray-500">
@@ -278,7 +337,6 @@ export default function QuestionDetailPage() {
             )}
           </Section>
 
-          {/* --- CONDITIONAL ACTION SECTION --- */}
           {question.status === "Pending" && (
             <Section title="Actions">
               <div>
@@ -298,13 +356,13 @@ export default function QuestionDetailPage() {
               </div>
               <div className="flex justify-end gap-4">
                 <button
-                  onClick={handleReject}
+                  onClick={onReject}
                   className="bg-red-600 text-white px-6 py-2 rounded-md font-semibold hover:bg-red-700 transition"
                 >
                   Reject
                 </button>
                 <button
-                  onClick={handleApprove}
+                  onClick={onApprove}
                   className="bg-green-600 text-white px-6 py-2 rounded-md font-semibold hover:bg-green-700 transition"
                 >
                   Approve
@@ -312,13 +370,24 @@ export default function QuestionDetailPage() {
               </div>
             </Section>
           )}
-
-          <div className="text-center text-xs text-gray-400 pt-4">
-            <p>Created: {new Date(question.createdAt).toLocaleString()}</p>
-            <p>Last Updated: {new Date(question.updatedAt).toLocaleString()}</p>
-          </div>
         </div>
       </div>
+
+      {/* Modals */}
+      <ConfirmationModal
+        isOpen={confirmation.isOpen}
+        onClose={() => setConfirmation({ ...confirmation, isOpen: false })}
+        onConfirm={confirmation.onConfirm}
+        message={confirmation.message}
+      />
+      <NotificationModal
+        isOpen={notification.isOpen}
+        onClose={() => {
+          setNotification({ ...notification, isOpen: false });
+          navigate(-1);
+        }}
+        message={notification.message}
+      />
     </div>
   );
 }

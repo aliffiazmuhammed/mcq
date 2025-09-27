@@ -11,7 +11,7 @@ const navigate = useNavigate();
   // Sidebar menu items (Checker-specific)
   const menuItems = [
     { name: "Review Questions", path: "/checker/review", icon: "📝" },
-    { name: "Accepted Questions", path: "/checker/accepted", icon: "✅" },
+    { name: "Reviewd Questions", path: "/checker/accepted", icon: "✅" },
     { name: "Question Papers", path: "/checker/claimed-pdfs", icon: "📗" },
   ];
 

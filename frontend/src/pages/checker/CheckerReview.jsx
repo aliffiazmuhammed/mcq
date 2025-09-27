@@ -1,20 +1,94 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
-import { host } from "../../utils/APIRoutes";
 import { useNavigate } from "react-router-dom";
+import { host } from "../../utils/APIRoutes";
+// --- Reusable Modal Components ---
+
+const ConfirmationModal = ({ isOpen, onClose, onConfirm, message }) => {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-60 z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-sm w-full p-6 text-center">
+        <h2 className="text-lg font-semibold text-gray-800 mb-4">{message}</h2>
+        <div className="flex justify-center gap-4">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 rounded-md bg-gray-200 text-gray-800 hover:bg-gray-300 font-semibold"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="px-4 py-2 rounded-md bg-green-600 text-white hover:bg-green-700 font-semibold"
+          >
+            Confirm
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const NotificationModal = ({ isOpen, onClose, message }) => {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-60 z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-sm w-full p-6 text-center">
+        <p className="text-gray-800 mb-4">{message}</p>
+        <button
+          onClick={onClose}
+          className="px-6 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 font-semibold"
+        >
+          OK
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const ImageModal = ({ src, onClose }) => {
+  if (!src) return null;
+  return (
+    <div
+      className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-75 z-50 p-4"
+      onClick={onClose}
+    >
+      <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full p-4 relative">
+        <button
+          onClick={onClose}
+          className="absolute -top-4 -right-4 text-3xl text-white font-bold"
+        >
+          &times;
+        </button>
+        <img
+          src={src}
+          alt="Full size content"
+          className="rounded-lg w-full h-auto max-h-[80vh] object-contain"
+        />
+      </div>
+    </div>
+  );
+};
 
 // --- Main Component ---
 
 export default function CheckerReview() {
-
-   const navigate = useNavigate();
+  const navigate = useNavigate();
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedQuestions, setSelectedQuestions] = useState([]);
 
   // State for modals
   const [imageModalSrc, setImageModalSrc] = useState(null);
-  const [detailsModalQuestion, setDetailsModalQuestion] = useState(null);
+  const [confirmation, setConfirmation] = useState({
+    isOpen: false,
+    message: "",
+    onConfirm: () => {},
+  });
+  const [notification, setNotification] = useState({
+    isOpen: false,
+    message: "",
+  });
 
   // State for filters
   const [filterMaker, setFilterMaker] = useState("All");
@@ -37,18 +111,21 @@ export default function CheckerReview() {
     fetchPending();
   }, []);
 
+  // UPDATED: Correctly extracts titles from populated course objects
   const makers = [
     "All",
     ...new Set(questions.map((q) => q.maker?.name).filter(Boolean)),
   ];
   const courses = [
     "All",
-    ...new Set(questions.map((q) => q.course).filter(Boolean)),
+    ...new Set(questions.map((q) => q.course?.title).filter(Boolean)),
   ];
 
+  // UPDATED: Filters based on the course title
   const filteredQuestions = questions.filter((q) => {
     const matchesMaker = filterMaker === "All" || q.maker?.name === filterMaker;
-    const matchesCourse = filterCourse === "All" || q.course === filterCourse;
+    const matchesCourse =
+      filterCourse === "All" || q.course?.title === filterCourse;
     return matchesMaker && matchesCourse;
   });
 
@@ -66,15 +143,7 @@ export default function CheckerReview() {
     }
   };
 
-  const handleBulkApprove = async () => {
-    if (selectedQuestions.length === 0) return;
-    if (
-      !window.confirm(
-        `Approve ${selectedQuestions.length} selected question(s)?`
-      )
-    )
-      return;
-
+  const proceedWithBulkApprove = async () => {
     try {
       const token = localStorage.getItem("token");
       await axios.put(
@@ -86,38 +155,27 @@ export default function CheckerReview() {
         prev.filter((q) => !selectedQuestions.includes(q._id))
       );
       setSelectedQuestions([]);
-      alert(`${selectedQuestions.length} question(s) approved.`);
+      setNotification({
+        isOpen: true,
+        message: `${selectedQuestions.length} question(s) approved successfully.`,
+      });
     } catch (err) {
       console.error("Bulk approve failed:", err);
-      alert("An error occurred during bulk approval.");
+      setNotification({
+        isOpen: true,
+        message: "An error occurred during bulk approval.",
+      });
     }
+    setConfirmation({ isOpen: false, message: "", onConfirm: () => {} });
   };
 
-  const handleSingleAction = async (action, id, comment = "") => {
-    try {
-      const token = localStorage.getItem("token");
-      if (action === "approve") {
-        await axios.put(
-          `${host}/api/checker/questions/${id}/approve`,
-          {},
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-      } else if (action === "reject") {
-        await axios.put(
-          `${host}/api/checker/questions/${id}/reject`,
-          { comments: comment },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-      }
-
-      // Remove the question from the list and close the modal
-      setQuestions((prev) => prev.filter((q) => q._id !== id));
-      setDetailsModalQuestion(null);
-      alert(`Question has been ${action}ed.`);
-    } catch (err) {
-      console.error(`Failed to ${action} question:`, err);
-      alert(`An error occurred while trying to ${action} the question.`);
-    }
+  const handleBulkApprove = () => {
+    if (selectedQuestions.length === 0) return;
+    setConfirmation({
+      isOpen: true,
+      message: `Are you sure you want to approve ${selectedQuestions.length} selected question(s)?`,
+      onConfirm: proceedWithBulkApprove,
+    });
   };
 
   return (
@@ -128,7 +186,6 @@ export default function CheckerReview() {
             Questions for Review ({filteredQuestions.length})
           </h1>
           <div className="flex flex-col sm:flex-row gap-4 mt-6 pt-4 border-t">
-            {/* Filter Controls */}
             <select
               value={filterMaker}
               onChange={(e) => setFilterMaker(e.target.value)}
@@ -199,7 +256,8 @@ export default function CheckerReview() {
                   <th className="p-4">Question</th>
                   <th className="p-4">Maker</th>
                   <th className="p-4">Course</th>
-                  <th className="p-4">Grade</th>
+                  <th className="p-4">Unit</th>
+                  <th className="p-4">Question Paper</th>
                   <th className="p-4 text-center">Actions</th>
                 </tr>
               </thead>
@@ -217,7 +275,13 @@ export default function CheckerReview() {
                         className="h-4 w-4 text-blue-600 rounded"
                       />
                     </td>
-                    <td className="p-4 font-medium text-gray-900 flex items-center gap-3">
+                    <td className="p-4 font-medium text-gray-900 max-w-xs">
+                 
+                      <span className="line-clamp-2 block mb-2">
+                        {q.question.text || "No text"}
+                       
+                      </span>
+                    
                       {q.question.image && (
                         <img
                           src={q.question.image}
@@ -226,13 +290,12 @@ export default function CheckerReview() {
                           onClick={() => setImageModalSrc(q.question.image)}
                         />
                       )}
-                      <span className="line-clamp-2">
-                        {q.question.text || "No text"}
-                      </span>
+                  
                     </td>
                     <td className="p-4">{q.maker?.name || "N/A"}</td>
-                    <td className="p-4">{q.course || "N/A"}</td>
-                    <td className="p-4">{q.grade || "N/A"}</td>
+                    <td className="p-4">{q.course?.title || "N/A"}</td>
+                    <td className="p-4">{q.unit || "N/A"}</td>
+                    <td className="p-4">{q.questionPaper?.name || "N/A"}</td>
                     <td className="p-4 text-center">
                       <button
                         onClick={() => navigate(`/checker/details/${q._id}`)}
@@ -245,7 +308,7 @@ export default function CheckerReview() {
                 ))}
                 {filteredQuestions.length === 0 && (
                   <tr>
-                    <td colSpan="6" className="text-center p-10 text-gray-500">
+                    <td colSpan="7" className="text-center p-10 text-gray-500">
                       No pending questions match your filters.
                     </td>
                   </tr>
@@ -255,6 +318,19 @@ export default function CheckerReview() {
           </div>
         )}
       </div>
+
+      <ConfirmationModal
+        isOpen={confirmation.isOpen}
+        onClose={() => setConfirmation({ ...confirmation, isOpen: false })}
+        onConfirm={confirmation.onConfirm}
+        message={confirmation.message}
+      />
+      <NotificationModal
+        isOpen={notification.isOpen}
+        onClose={() => setNotification({ ...notification, isOpen: false })}
+        message={notification.message}
+      />
+      <ImageModal src={imageModalSrc} onClose={() => setImageModalSrc(null)} />
     </div>
   );
 }

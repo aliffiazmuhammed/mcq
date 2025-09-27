@@ -2,11 +2,25 @@ import Question from "../models/Question.js";
 import QuestionPaper from "../models/QuestionPaper.js";
 
 
-// Fetch all pending questions for checker
 const getPendingQuestions = async (req, res) => {
     try {
-        const questions = await Question.find({ status: "Pending" }).populate("maker", "name email");
+        // Find all questions with the status "Pending".
+        const questions = await Question.find({ status: "Pending" })
+            // --- UPDATED ---
+            // Chain multiple .populate() calls to retrieve related data.
+
+            // Populate the 'maker' field with the user's name and email.
+            .populate("maker", "name email")
+
+            // Populate the 'course' field with its 'title'.
+            .populate("course", "title")
+
+            // Populate the 'questionPaper' field with its 'name'.
+            .populate("questionPaper", "name");
+
+        // The response will now contain the full maker, course, and question paper objects.
         res.json(questions);
+
     } catch (err) {
         console.error("Error fetching pending questions:", err);
         res.status(500).json({ message: "Server error fetching pending questions" });
@@ -82,7 +96,14 @@ const getReviewedQuestions = async (req, res) => {
     try {
         const questions = await Question.find({
             status: { $in: ["Approved", "Rejected"] }
-        }).populate("maker", "name email");
+        })
+            // Populate the maker's details
+            .populate("maker", "name email")
+            // --- UPDATED: Populate the course title ---
+            .populate("course", "title")
+            // --- UPDATED: Populate the question paper name ---
+            .populate("questionPaper", "name")
+            .sort({ updatedAt: -1 }); // Sort by last updated time
 
         res.json(questions);
     } catch (err) {
@@ -90,6 +111,7 @@ const getReviewedQuestions = async (req, res) => {
         res.status(500).json({ message: "Server error fetching reviewed questions" });
     }
 };
+
 const bulkApproveQuestions = async (req, res) => {
     try {
         // 1. Get the array of question IDs from the request body.
@@ -137,24 +159,35 @@ const getQuestionById = async (req, res) => {
     try {
         const { id } = req.params;
 
-        // The authorization check is now handled by the 'authorize' middleware,
-        // so we can remove that logic from here.
-
+        // Fetch the question by its ID.
+        // --- UPDATED: Chained additional .populate() calls ---
         const question = await Question.findById(id)
+            // Populate the 'maker' who created the question.
             .populate("maker", "name email")
-            .populate("checkedBy", "name email");
+
+            // Populate the 'checkedBy' user if the question has been reviewed.
+            .populate("checkedBy", "name email")
+
+            // Populate the 'course' to get its title.
+            .populate("course", "title")
+
+            // Populate the 'questionPaper' and select both its 'name' and 'url'.
+            // This is the key change to send the PDF URL to the frontend.
+            .populate("questionPaper", "name url");
 
         if (!question) {
             return res.status(404).json({ message: "Question not found." });
         }
 
-        // If the code reaches this point, the user is authorized.
-        // We can now safely send the data.
+        // The question object sent in the response will now include a 'questionPaper'
+        // object with the name and url, e.g., 
+        // questionPaper: { _id: '...', name: 'Sample Paper 2024', url: 'http://...' }
         return res.json(question);
 
     } catch (err) {
         console.error("Error fetching question by ID:", err);
         if (err.kind === 'ObjectId') {
+            // This handles cases where the provided ID is not a valid MongoDB ObjectId format.
             return res.status(400).json({ message: "Invalid question ID format." });
         }
         return res.status(500).json({ message: "Server error." });
