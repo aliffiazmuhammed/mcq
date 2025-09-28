@@ -36,7 +36,7 @@ const QuestionPaperSchema = new mongoose.Schema(
         },
         uploadedBy: {
             type: mongoose.Schema.Types.ObjectId,
-            ref: "User", // Refers to the user who uploaded the files
+            ref: "Admin", // Refers to the user who uploaded the files
             required: true,
         },
 

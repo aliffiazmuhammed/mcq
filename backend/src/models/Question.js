@@ -26,35 +26,28 @@ const questionSchema = new mongoose.Schema(
             required: [true, "Subject is required."],
             trim: true,
         },
+        questionPaperYear: {
+            type: Number,
+            required: [true, "The year of the question paper is required."],
+        },
         unit: {
             type: String,
             trim: true,
         },
         chapter: String,
 
-        // --- NEWLY ADDED FIELDS ---
-
-        /**
-         * @desc Optional reference to a specific question paper.
-         */
         questionPaper: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "QuestionPaper", // This ref must match the QuestionPaper model name
-            required: [true, "quetion paper is required."],
+            required: [true, "Question paper is required."],
             default: null,
         },
-
-        /**
-         * @desc Optional question number, stored as a string to allow for formats like '1a' or 'II.3'.
-         */
         questionNumber: {
             type: String,
-            required: [true, "Quenstion number is required."],
+            required: [true, "Question number is required."],
             trim: true,
             default: null,
         },
-
-        // --- END OF NEWLY ADDED FIELDS ---
 
         FrequentlyAsked: {
             type: Boolean,
@@ -67,7 +60,17 @@ const questionSchema = new mongoose.Schema(
             },
         ],
         explanation: TextImageSchema,
-        reference: TextImageSchema,
+
+        // --- UPDATED REFERENCE FIELD ---
+        /**
+         * @desc An object to store URLs for up to two reference images.
+         */
+        reference: {
+            image1: { type: String, default: null },
+            image2: { type: String, default: null },
+        },
+        // --- END OF UPDATE ---
+
         complexity: {
             type: String,
             enum: ["Easy", "Medium", "Hard"],

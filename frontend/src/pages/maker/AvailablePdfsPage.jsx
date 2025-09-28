@@ -1,9 +1,7 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
-// The local import for 'host' has been inlined to prevent compilation errors.
- import { host } from "../../utils/APIRoutes";
-
+import { host } from "../../utils/APIRoutes";
 
 // --- Main Component ---
 export default function AvailablePdfsPage() {
@@ -20,6 +18,7 @@ export default function AvailablePdfsPage() {
       const res = await axios.get(`${host}/api/questions/available`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      // Assuming the API now returns papers with all necessary details
       setPapers(res.data);
     } catch (err) {
       console.error("Error fetching available PDFs:", err);
@@ -28,7 +27,7 @@ export default function AvailablePdfsPage() {
       setLoading(false);
     }
   };
-
+console.log(papers)
   useEffect(() => {
     fetchAvailablePdfs();
   }, []);
@@ -53,8 +52,9 @@ export default function AvailablePdfsPage() {
         }
       );
 
-      alert("Paper assigned successfully! You will now be redirected.");
-      // Navigate the maker to the page where they can start adding questions for this paper
+      alert(
+        "Paper assigned successfully! You can now create questions for it."
+      );
       navigate(`/maker/create`);
     } catch (err) {
       console.error("Error taking PDF:", err);
@@ -62,17 +62,21 @@ export default function AvailablePdfsPage() {
         err.response?.data?.message ||
           "Failed to take this paper. It might have been taken by another user."
       );
-      // Refresh the list to show the latest availability
-      fetchAvailablePdfs();
+      fetchAvailablePdfs(); // Refresh the list
     } finally {
       setActionInProgress(null);
     }
   };
 
   // Client-side search filtering
-  const filteredPapers = papers.filter((paper) =>
-    paper.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredPapers = papers.filter((paper) => {
+    const term = searchTerm.toLowerCase();
+    return (
+      paper.name.toLowerCase().includes(term) ||
+      (paper.course?.title || "").toLowerCase().includes(term) ||
+      (paper.subject || "").toLowerCase().includes(term)
+    );
+  });
 
   return (
     <div className="bg-gray-50 min-h-screen p-4 sm:p-8">
@@ -82,16 +86,16 @@ export default function AvailablePdfsPage() {
             Available Question Papers
           </h1>
           <p className="text-gray-500 mt-2">
-            Select a paper to start creating questions from it. Once you take a
-            paper, it will be locked for other makers.
+            Select a paper to start creating questions. Once you take a paper,
+            it will be locked for other makers.
           </p>
           <div className="mt-6">
             <input
               type="text"
-              placeholder="Search by paper name..."
+              placeholder="Search by name, course, or subject..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="border border-gray-300 rounded-md px-4 py-2 w-full max-w-md focus:ring-2 focus:ring-blue-500"
+              className="border border-gray-300 rounded-md px-4 py-2 w-full max-w-md focus:ring-2 focus:ring-blue-500 transition"
             />
           </div>
         </div>
@@ -105,8 +109,27 @@ export default function AvailablePdfsPage() {
             <table className="w-full text-sm text-left text-gray-600">
               <thead className="text-xs text-gray-700 uppercase bg-gray-100">
                 <tr>
-                  <th className="p-4">Paper Name</th>
-                  <th className="p-4 text-center">Actions</th>
+                  <th scope="col" className="px-6 py-3">
+                    Paper Name
+                  </th>
+                  <th scope="col" className="px-6 py-3">
+                    Course
+                  </th>
+                  <th scope="col" className="px-6 py-3">
+                    Subject
+                  </th>
+                  <th scope="col" className="px-6 py-3">
+                    Year
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-center">
+                    Question PDF
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-center">
+                    Solution PDF
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-center">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -115,35 +138,64 @@ export default function AvailablePdfsPage() {
                     key={paper._id}
                     className="bg-white border-b hover:bg-gray-50"
                   >
-                    <td className="p-4 font-medium text-gray-900">
+                    <td className="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">
                       {paper.name}
                     </td>
-                    <td className="p-4 text-center">
-                      <div className="flex items-center justify-center gap-2">
+                    <td className="px-6 py-4">
+                      {paper.course?.title || "N/A"}
+                    </td>
+                    <td className="px-6 py-4">{paper.subject || "N/A"}</td>
+                    <td className="px-6 py-4">
+                      {paper.questionPaperYear || "N/A"}
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      {paper.questionPaperFile ? (
                         <a
-                          href={paper.url}
+                          href={paper.questionPaperFile}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="bg-gray-500 text-white font-semibold px-4 py-2 rounded-md hover:bg-gray-600 transition-colors"
+                          className="bg-green-500 text-white font-semibold px-4 py-2 rounded-md hover:bg-green-600 transition-colors"
                         >
                           View
                         </a>
-                        <button
-                          onClick={() => handleTakePdf(paper._id)}
-                          disabled={actionInProgress === paper._id}
-                          className="bg-blue-600 text-white font-semibold px-4 py-2 rounded-md hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-wait"
+                      ) : (
+                        <span className="text-gray-400 italic">
+                          Not Available
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      {paper.solutionPaperFile ? (
+                        <a
+                          href={paper.solutionPaperFile}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="bg-indigo-500 text-white font-semibold px-4 py-2 rounded-md hover:bg-indigo-600 transition-colors"
                         >
-                          {actionInProgress === paper._id
-                            ? "Taking..."
-                            : "Take PDF"}
-                        </button>
-                      </div>
+                          View
+                        </a>
+                      ) : (
+                        <span className="text-gray-400 italic">
+                          Not Available
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <button
+                        onClick={() => handleTakePdf(paper._id)}
+                        disabled={actionInProgress === paper._id}
+                        className="bg-blue-600 text-white font-semibold px-4 py-2 rounded-md hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-wait transition-colors"
+                      >
+                        {actionInProgress === paper._id
+                          ? "Taking..."
+                          : "Take Paper"}
+                      </button>
                     </td>
                   </tr>
                 ))}
                 {filteredPapers.length === 0 && (
                   <tr>
-                    <td colSpan="6" className="text-center p-10 text-gray-500">
+                    <td colSpan="7" className="text-center p-10 text-gray-500">
                       {papers.length > 0
                         ? "No papers match your search."
                         : "There are currently no available papers."}

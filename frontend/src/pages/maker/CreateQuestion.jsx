@@ -1,12 +1,60 @@
 import { useState, useCallback, useEffect } from "react";
-import Cropper from "react-easy-crop";
-import Modal from "react-modal";
-import { getCroppedImg } from "../../utils/cropImage"; // Assuming this utility exists
+import Cropper from "https://esm.sh/react-easy-crop";
+import Modal from "https://esm.sh/react-modal";
 import axios from "axios";
 import { useParams, useNavigate } from "react-router-dom";
-import { host } from "../../utils/APIRoutes"; // Assuming this utility exists
+import { host } from "../../utils/APIRoutes";
 
-// Helper to get the correct URL for image previews (handles both File objects and URL strings)
+/**
+ * Utility function to crop an image based on pixel crop values.
+ * @param {string} imageSrc - The source of the image to crop.
+ * @param {object} pixelCrop - The pixel crop dimensions (x, y, width, height).
+ * @returns {Promise<Blob>} A promise that resolves with the cropped image as a Blob.
+ */
+function getCroppedImg(imageSrc, pixelCrop) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.src = imageSrc;
+    image.crossOrigin = "anonymous"; // Handles CORS issues
+
+    image.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = pixelCrop.width;
+      canvas.height = pixelCrop.height;
+      const ctx = canvas.getContext("2d");
+
+      if (!ctx) {
+        reject(new Error("Could not get canvas context"));
+        return;
+      }
+
+      ctx.drawImage(
+        image,
+        pixelCrop.x,
+        pixelCrop.y,
+        pixelCrop.width,
+        pixelCrop.height,
+        0,
+        0,
+        pixelCrop.width,
+        pixelCrop.height
+      );
+
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          reject(new Error("Canvas is empty"));
+          return;
+        }
+        resolve(blob);
+      }, "image/jpeg");
+    };
+    image.onerror = (error) => {
+      reject(error);
+    };
+  });
+}
+
+// Helper to get the correct URL for image previews
 const getImagePreviewUrl = (image) => {
   if (!image) return null;
   if (image instanceof File) {
@@ -26,14 +74,13 @@ const SectionWrapper = ({ title, children }) => (
   </fieldset>
 );
 
-// NEW: Component for Question Paper Details
 const QuestionPaperDetailsInputs = ({
   formData,
-  handleInputChange,
   questionPapers,
+  onPaperSelect,
 }) => (
   <SectionWrapper title="Question Paper Details">
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
       <div>
         <label className="block text-sm font-medium text-gray-600 mb-1">
           Select Question Paper
@@ -41,7 +88,7 @@ const QuestionPaperDetailsInputs = ({
         <select
           name="questionPaper"
           value={formData.questionPaper}
-          onChange={handleInputChange}
+          onChange={onPaperSelect}
           className="border border-gray-300 px-3 py-2 rounded-md w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white"
         >
           <option value="">None</option>
@@ -54,55 +101,40 @@ const QuestionPaperDetailsInputs = ({
       </div>
       <div>
         <label className="block text-sm font-medium text-gray-600 mb-1">
-          Question Number
+          Course
         </label>
         <input
           type="text"
-          name="questionNumber"
-          placeholder="e.g., 1a, II.3"
-          value={formData.questionNumber}
-          onChange={handleInputChange}
-          className="border border-gray-300 px-3 py-2 rounded-md w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+          name="course"
+          value={formData.course}
+          readOnly
+          className="border border-gray-300 px-3 py-2 rounded-md w-full bg-gray-100 cursor-not-allowed"
         />
       </div>
-    </div>
-  </SectionWrapper>
-);
-
-const QuestionMetadataInputs = ({ formData, handleInputChange, courses }) => (
-  <SectionWrapper title="Question Classification">
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-      {["course", "subject", "unit", "chapter"].map((field) => (
-        <div key={field}>
-          <label className="block text-sm font-medium text-gray-600 mb-1 capitalize">
-            {field}
-          </label>
-          {field === "course" ? (
-            <select
-              name="course"
-              value={formData.course}
-              onChange={handleInputChange}
-              className="border border-gray-300 px-3 py-2 rounded-md w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white"
-            >
-              <option value="">Select a course...</option>
-              {courses.map((course) => (
-                <option key={course._id} value={course.title}>
-                  {course.title}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <input
-              type="text"
-              name={field}
-              placeholder={`Enter ${field} name...`}
-              value={formData[field]}
-              onChange={handleInputChange}
-              className="border border-gray-300 px-3 py-2 rounded-md w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
-            />
-          )}
-        </div>
-      ))}
+      <div>
+        <label className="block text-sm font-medium text-gray-600 mb-1">
+          Subject
+        </label>
+        <input
+          type="text"
+          name="subject"
+          value={formData.subject}
+          readOnly
+          className="border border-gray-300 px-3 py-2 rounded-md w-full bg-gray-100 cursor-not-allowed"
+        />
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-600 mb-1">
+          Question Paper Year
+        </label>
+        <input
+          type="text"
+          name="questionPaperYear"
+          value={formData.questionPaperYear}
+          readOnly
+          className="border border-gray-300 px-3 py-2 rounded-md w-full bg-gray-100 cursor-not-allowed"
+        />
+      </div>
     </div>
   </SectionWrapper>
 );
@@ -115,11 +147,13 @@ const ContentInputSection = ({
   onTextChange,
   onFileChange,
   onRemoveImage,
+  children,
 }) => {
   const fileInputId = `${textName}-file-input`;
 
   return (
     <SectionWrapper title={label}>
+      {children}
       <textarea
         name={textName}
         placeholder={`${label} content...`}
@@ -273,6 +307,83 @@ const ChoicesSection = ({
   </SectionWrapper>
 );
 
+// Reusable component for a single image upload slot
+const ImageUploader = ({
+  label,
+  imageValue,
+  onFileChange,
+  onRemoveImage,
+  fieldName,
+}) => {
+  const fileInputId = `${fieldName}-input`;
+  return (
+    <div>
+      <label className="block text-sm font-medium text-gray-600 mb-2">
+        {label}
+      </label>
+      <div className="flex items-center gap-4">
+        <input
+          id={fileInputId}
+          type="file"
+          accept="image/*"
+          onChange={(e) => onFileChange(e, fieldName)}
+          className="hidden"
+        />
+        <label
+          htmlFor={fileInputId}
+          className="cursor-pointer bg-blue-50 text-blue-700 font-semibold text-sm px-4 py-2 rounded-full hover:bg-blue-100 transition"
+        >
+          Upload Image
+        </label>
+        {imageValue && (
+          <div className="relative">
+            <img
+              src={getImagePreviewUrl(imageValue)}
+              alt={`${label} Preview`}
+              className="rounded-md h-24 w-auto object-contain border p-1"
+            />
+            <button
+              type="button"
+              onClick={() => onRemoveImage(fieldName)}
+              className="absolute top-0 right-0 -mt-2 -mr-2 bg-red-500 text-white rounded-full h-5 w-5 flex items-center justify-center text-xs font-bold hover:bg-red-700 transition"
+              aria-label="Remove image"
+            >
+              &times;
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// NEW: Component for handling two reference images
+const ReferenceImagesSection = ({
+  imageValue1,
+  imageValue2,
+  onFileChange,
+  onRemoveImage,
+}) => (
+  <SectionWrapper title="Reference Images">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <ImageUploader
+        label="Reference Image 1"
+        imageValue={imageValue1}
+        onFileChange={onFileChange}
+        onRemoveImage={onRemoveImage}
+        fieldName="referenceImage1"
+      />
+      <ImageUploader
+        label="Reference Image 2"
+        imageValue={imageValue2}
+        onFileChange={onFileChange}
+        onRemoveImage={onRemoveImage}
+        fieldName="referenceImage2"
+      />
+    </div>
+  </SectionWrapper>
+);
+
 const ImageCropModal = ({
   modalState,
   closeModal,
@@ -341,13 +452,12 @@ export default function CreateQuestion() {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  // UPDATED: Added questionPaper and questionNumber to initial state
   const initialFormData = {
     course: "",
     subject: "",
     unit: "",
-    chapter: "",
     questionPaper: "",
+    questionPaperYear: "",
     questionNumber: "",
     FrequentlyAsked: false,
     questionText: "",
@@ -363,12 +473,12 @@ export default function CreateQuestion() {
     explanationImage: null,
     complexity: "Easy",
     keywords: "",
-    referenceImage: null,
+    referenceImage1: null,
+    referenceImage2: null,
   };
 
   const [formData, setFormData] = useState(initialFormData);
-  const [courses, setCourses] = useState([]);
-  const [questionPapers, setQuestionPapers] = useState([]); // ADDED: State for claimed papers
+  const [questionPapers, setQuestionPapers] = useState([]);
   const [cropModal, setCropModal] = useState({
     open: false,
     src: null,
@@ -380,34 +490,22 @@ export default function CreateQuestion() {
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // Fetch courses and claimed question papers on component mount
+  // Fetch claimed question papers on component mount
   useEffect(() => {
     const token = localStorage.getItem("token");
-
-    const fetchCourses = async () => {
-      try {
-        const res = await axios.get(`${host}/api/questions/all`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        setCourses(res.data);
-      } catch (err) {
-        console.error("Failed to fetch courses:", err);
-      }
-    };
-
     const fetchClaimedPapers = async () => {
       try {
-        // ASSUMPTION: This endpoint returns question papers claimed by the logged-in maker
-        const res = await axios.get(`${host}/api/questions/papers/makerclaimed`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const res = await axios.get(
+          `${host}/api/questions/papers/makerclaimed`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
         setQuestionPapers(res.data);
       } catch (err) {
         console.error("Failed to fetch claimed question papers:", err);
       }
     };
-
-    fetchCourses();
     fetchClaimedPapers();
   }, []);
 
@@ -430,15 +528,13 @@ export default function CreateQuestion() {
                   image: opt.image || null,
                 }))
               : initialFormData.choices;
-
-          // UPDATED: Populate all fields, including new ones
           setFormData({
             _id: q._id,
-            course: q.course?.title || "", 
+            course: q.course?.title || "",
             subject: q.subject || "",
             unit: q.unit || "",
-            chapter: q.chapter || "",
-            questionPaper: q.questionPaper?._id || "", 
+            questionPaper: q.questionPaper?._id || "",
+            questionPaperYear: q.questionPaperYear || "",
             questionNumber: q.questionNumber || "",
             FrequentlyAsked: q.FrequentlyAsked || false,
             questionText: q.question?.text || "",
@@ -449,7 +545,8 @@ export default function CreateQuestion() {
             explanationImage: q.explanation?.image || null,
             complexity: q.complexity || "Easy",
             keywords: Array.isArray(q.keywords) ? q.keywords.join(", ") : "",
-            referenceImage: q.reference?.image || null,
+            referenceImage1: q.reference?.image1 || null,
+            referenceImage2: q.reference?.image2 || null,
           });
         } catch (err) {
           console.error("Error loading draft", err);
@@ -471,6 +568,43 @@ export default function CreateQuestion() {
       ...prev,
       [name]: type === "checkbox" ? checked : value,
     }));
+  }, []);
+
+  const handleQuestionPaperChange = useCallback(async (e) => {
+    const paperId = e.target.value;
+    if (!paperId) {
+      setFormData((prev) => ({
+        ...prev,
+        questionPaper: "",
+        course: "",
+        subject: "",
+        questionPaperYear: "",
+      }));
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await axios.get(
+        `${host}/api/questions/question-papers/${paperId}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      const selectedPaper = res.data;
+      setFormData((prev) => ({
+        ...prev,
+        questionPaper: paperId,
+        course: selectedPaper?.course?.title || "",
+        subject: selectedPaper?.subject || "",
+        questionPaperYear: selectedPaper?.questionPaperYear || "",
+      }));
+    } catch (err) {
+      console.error("Failed to fetch question paper details:", err);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   const handleChoiceChange = useCallback((index, value) => {
@@ -548,19 +682,18 @@ export default function CreateQuestion() {
     }
   }, [cropModal, croppedAreaPixels]);
 
-    const handleRemoveImage = useCallback((fieldName) => {
-      setFormData((prev) => ({ ...prev, [fieldName]: null }));
-    }, []);
+  const handleRemoveImage = useCallback((fieldName) => {
+    setFormData((prev) => ({ ...prev, [fieldName]: null }));
+  }, []);
 
-    const handleRemoveChoiceImage = useCallback((index) => {
-      setFormData((prev) => {
-        const updatedChoices = prev.choices.map((choice, i) =>
-          i === index ? { ...choice, image: null } : choice
-        );
-        return { ...prev, choices: updatedChoices };
-      });
-    }, []);
-
+  const handleRemoveChoiceImage = useCallback((index) => {
+    setFormData((prev) => {
+      const updatedChoices = prev.choices.map((choice, i) =>
+        i === index ? { ...choice, image: null } : choice
+      );
+      return { ...prev, choices: updatedChoices };
+    });
+  }, []);
 
   const handleSubmit = useCallback(
     async (type) => {
@@ -569,18 +702,17 @@ export default function CreateQuestion() {
         const formPayload = new FormData();
         if (formData._id) formPayload.append("_id", formData._id);
 
-        // Append all fields except images and choices
         Object.keys(formData).forEach((key) => {
           if (
             ![
               "choices",
               "questionImage",
               "explanationImage",
-              "referenceImage",
+              "referenceImage1",
+              "referenceImage2",
             ].includes(key) &&
             formData[key] !== null
           ) {
-            // Append questionPaper only if it has a value
             if (key === "questionPaper" && !formData[key]) return;
             formPayload.append(key, formData[key]);
           }
@@ -591,8 +723,10 @@ export default function CreateQuestion() {
           formPayload.append("questionImage", formData.questionImage);
         if (formData.explanationImage instanceof File)
           formPayload.append("explanationImage", formData.explanationImage);
-        if (formData.referenceImage instanceof File)
-          formPayload.append("referenceImage", formData.referenceImage);
+        if (formData.referenceImage1 instanceof File)
+          formPayload.append("referenceImage1", formData.referenceImage1);
+        if (formData.referenceImage2 instanceof File)
+          formPayload.append("referenceImage2", formData.referenceImage2);
 
         if (typeof formData.questionImage === "string")
           formPayload.append("existingQuestionImage", formData.questionImage);
@@ -601,8 +735,16 @@ export default function CreateQuestion() {
             "existingExplanationImage",
             formData.explanationImage
           );
-        if (typeof formData.referenceImage === "string")
-          formPayload.append("existingReferenceImage", formData.referenceImage);
+        if (typeof formData.referenceImage1 === "string")
+          formPayload.append(
+            "existingReferenceImage1",
+            formData.referenceImage1
+          );
+        if (typeof formData.referenceImage2 === "string")
+          formPayload.append(
+            "existingReferenceImage2",
+            formData.referenceImage2
+          );
 
         formData.choices.forEach((choice) => {
           formPayload.append("choicesText[]", choice.text || "");
@@ -643,7 +785,6 @@ export default function CreateQuestion() {
     [formData, navigate]
   );
 
-  console.log(formData)
   return (
     <div className="bg-gray-50 min-h-screen p-4 sm:p-8">
       <div className="max-w-5xl mx-auto p-6 sm:p-8 bg-white rounded-xl shadow-lg relative">
@@ -661,18 +802,12 @@ export default function CreateQuestion() {
         )}
 
         <form onSubmit={(e) => e.preventDefault()}>
-          {/* ADDED the new component here */}
           <QuestionPaperDetailsInputs
             formData={formData}
-            handleInputChange={handleInputChange}
             questionPapers={questionPapers}
+            onPaperSelect={handleQuestionPaperChange}
           />
 
-          <QuestionMetadataInputs
-            formData={formData}
-            handleInputChange={handleInputChange}
-            courses={courses}
-          />
           <ContentInputSection
             label="Question"
             textName="questionText"
@@ -681,7 +816,22 @@ export default function CreateQuestion() {
             onTextChange={handleInputChange}
             onFileChange={(e) => handleFileChange(e, "questionImage")}
             onRemoveImage={() => handleRemoveImage("questionImage")}
-          />
+          >
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-600 mb-1">
+                Question Number
+              </label>
+              <input
+                type="text"
+                name="questionNumber"
+                placeholder="e.g., 1a, II.3"
+                value={formData.questionNumber}
+                onChange={handleInputChange}
+                className="border border-gray-300 px-3 py-2 rounded-md w-full sm:w-1/2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+              />
+            </div>
+          </ContentInputSection>
+
           <ChoicesSection
             choices={formData.choices}
             correctAnswer={formData.correctAnswer}
@@ -692,6 +842,16 @@ export default function CreateQuestion() {
             addChoice={addChoice}
             onRemoveChoiceImage={handleRemoveChoiceImage}
           />
+
+          {/* --- UPDATED REFERENCE IMAGES SECTION --- */}
+          <ReferenceImagesSection
+            imageValue1={formData.referenceImage1}
+            imageValue2={formData.referenceImage2}
+            onFileChange={handleFileChange}
+            onRemoveImage={handleRemoveImage}
+          />
+          {/* -------------------------------------- */}
+
           <ContentInputSection
             label="Explanation"
             textName="explanation"
@@ -699,10 +859,24 @@ export default function CreateQuestion() {
             imageValue={formData.explanationImage}
             onTextChange={handleInputChange}
             onFileChange={(e) => handleFileChange(e, "explanationImage")}
+            onRemoveImage={() => handleRemoveImage("explanationImage")}
           />
 
           <SectionWrapper title="Additional Information">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">
+                  Unit
+                </label>
+                <input
+                  type="text"
+                  name="unit"
+                  placeholder="Enter unit name..."
+                  value={formData.unit}
+                  onChange={handleInputChange}
+                  className="border border-gray-300 px-3 py-2 rounded-md w-full focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-600 mb-1">
                   Complexity

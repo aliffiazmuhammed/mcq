@@ -1,5 +1,5 @@
 import express from "express";
-import { createOrUpdateQuestion, getQuestionById, getDraftQuestions, deleteQuestions, submitQuestionsForApproval, getSubmittedQuestions ,getAvailablePapers,claimPaper, getClaimedPapers ,getAllCourses ,getClaimedPapersByMaker} from "../controllers/questionController.js";
+import { createOrUpdateQuestion, getQuestionById, getDraftQuestions, deleteQuestions, submitQuestionsForApproval, getSubmittedQuestions ,getAvailablePapers,claimPaper, getClaimedPapers ,getAllCourses ,getClaimedPapersByMaker,getQuestionPaperById} from "../controllers/questionController.js";
 import { protect, authorize } from "../middlewares/authmiddleware.js";
 import { ROLES } from "../constants/roles.js";
 import upload from "../middlewares/uploadmiddleware.js";
@@ -12,7 +12,10 @@ router.post(
     upload.fields([
         { name: "questionImage", maxCount: 1 },
         { name: "explanationImage", maxCount: 1 },
-        { name: "referenceImage", maxCount: 1 },
+        // UPDATED: Replaced 'referenceImage' with two new fields
+        { name: "referenceImage1", maxCount: 1 },
+        { name: "referenceImage2", maxCount: 1 },
+        // This handles all images for the answer choices
         { name: "choicesImage", maxCount: 10 },
     ]),
     createOrUpdateQuestion
@@ -26,7 +29,7 @@ router.put('/papers/:id/claim', protect, authorize('maker'), claimPaper);
 router.get('/papers/claimed', protect, authorize('maker'), getClaimedPapers);
 router.get("/all", protect, getAllCourses);
 router.get("/papers/makerclaimed", protect, getClaimedPapersByMaker);
-
+router.get("/question-papers/:id",protect,getQuestionPaperById)
 router.get("/:id", protect, getQuestionById);
 
 export default router;

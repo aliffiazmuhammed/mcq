@@ -122,7 +122,7 @@ const uploadPdfs = async (req, res) => {
             questionPaperYear, // ADDED
             numberOfQuestions
         } = req.body;
-
+        console.log(req.user._id)
         const questionPaperFile = req.files?.questionPaper?.[0];
         const solutionPaperFile = req.files?.solutionPaper?.[0];
 

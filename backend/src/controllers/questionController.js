@@ -9,9 +9,13 @@ const createOrUpdateQuestion = async (req, res) => {
     try {
         const {
             _id, course, unit, subject, chapter, questionText,
-            questionPaper, questionNumber, // Destructure new fields
+            questionPaper, questionNumber,
             correctAnswer, explanation, complexity, keywords, status,
-            existingQuestionImage, existingExplanationImage, existingReferenceImage, existingChoiceImages
+            existingQuestionImage, existingExplanationImage,
+            // --- UPDATED: Destructure new reference image fields ---
+            existingReferenceImage1, existingReferenceImage2,
+            // --- END OF UPDATE ---
+            existingChoiceImages, questionPaperYear
         } = req.body;
 
         // --- Find Course ID from title ---
@@ -28,6 +32,7 @@ const createOrUpdateQuestion = async (req, res) => {
 
         const uploadToCloudinary = async (file) => {
             if (!file) return null;
+            // Using Multer's buffer to create a base64 string for upload
             const base64 = `data:${file.mimetype};base64,${file.buffer.toString("base64")}`;
             try {
                 const result = await cloudinary.uploader.upload(base64, { folder: "questions" });
@@ -46,10 +51,17 @@ const createOrUpdateQuestion = async (req, res) => {
             ? await uploadToCloudinary(req.files.explanationImage[0])
             : (existingExplanationImage || null);
 
-        const referenceImage = req.files?.referenceImage
-            ? await uploadToCloudinary(req.files.referenceImage[0])
-            : (existingReferenceImage || null);
+        // --- UPDATED: Handle two separate reference images ---
+        const referenceImageUrl1 = req.files?.referenceImage1
+            ? await uploadToCloudinary(req.files.referenceImage1[0])
+            : (existingReferenceImage1 || null);
 
+        const referenceImageUrl2 = req.files?.referenceImage2
+            ? await uploadToCloudinary(req.files.referenceImage2[0])
+            : (existingReferenceImage2 || null);
+        // --- END OF UPDATE ---
+
+        // Logic for handling choices remains the same
         let choiceTexts = req.body.choicesText || [];
         if (!Array.isArray(choiceTexts)) choiceTexts = [choiceTexts];
 
@@ -78,29 +90,30 @@ const createOrUpdateQuestion = async (req, res) => {
             isCorrect: Number(correctAnswer) === i,
         }));
 
-        // --- UPDATED: Construct questionData with new optional fields ---
         const questionData = {
             course: courseId,
-            unit, subject, chapter,
+            unit, subject, chapter, questionPaperYear,
             question: { text: questionText || "", image: questionImage },
             options: mappedChoices,
             explanation: { text: explanation || "", image: explanationImage },
-            reference: { text: "", image: referenceImage },
+            // --- UPDATED: Construct reference object according to new schema ---
+            reference: {
+                image1: referenceImageUrl1,
+                image2: referenceImageUrl2,
+            },
+            // --- END OF UPDATE ---
             complexity,
             keywords: keywords ? keywords.split(",").map((k) => k.trim()) : [],
             status: status || 'Draft',
-            maker: req.user._id,
+            maker: req.user._id, // Assumes user is authenticated and attached to req
         };
 
-        // Add optional fields only if they have a value. This prevents saving
-        // empty strings for fields that should be null or non-existent.
         if (questionPaper) {
             questionData.questionPaper = questionPaper;
         }
         if (questionNumber) {
             questionData.questionNumber = questionNumber;
         }
-        // --- END OF UPDATE ---
 
         let question;
         if (_id) {
@@ -290,13 +303,23 @@ const getSubmittedQuestions = async (req, res) => {
 
 const getAvailablePapers = async (req, res) => {
     try {
-        // Find all documents in the QuestionPaper collection where the 'usedBy' field is null.
-        // This effectively gets all "unlocked" or "available" papers.
+        // Find all question papers where the 'claimedBy' field is not set (i.e., is null or does not exist).
+        // This retrieves all "unlocked" or "available" papers.
         const availablePapers = await QuestionPaper.find({ usedBy: null })
-            .populate("uploadedBy", "name") // Optional: gets the name of the admin who uploaded it
-            .sort({ createdAt: -1 });      // Shows the newest papers first
+            // Populate the 'course' field and select only its 'title' for the response.
+            .populate({
+                path: 'course',
+                select: 'title'
+            })
+            // Continue to populate the name of the admin who uploaded it.
+            .populate({
+                path: 'uploadedBy',
+                select: 'name'
+            })
+            // Sort to show the most recently uploaded papers first.
+            .sort({ createdAt: -1 });
 
-        res.json(availablePapers);
+        res.status(200).json(availablePapers);
 
     } catch (err) {
         console.error("Error fetching available papers:", err);
@@ -403,4 +426,19 @@ const getClaimedPapersByMaker = async (req, res) => {
     }
 };
 
-export { createOrUpdateQuestion, getQuestionById, getDraftQuestions, deleteQuestions, submitQuestionsForApproval, getSubmittedQuestions , getAvailablePapers,claimPaper,getClaimedPapers,getAllCourses,getClaimedPapersByMaker};
+const getQuestionPaperById = async (req, res) => {
+    try {
+        const paper = await QuestionPaper.findById(req.params.id)
+            .populate({ path: 'course', select: 'title' });
+
+        if (!paper) {
+            return res.status(404).json({ message: "Question Paper not found." });
+        }
+        res.status(200).json(paper);
+    } catch (error) {
+        console.error("Error in getQuestionPaperById:", error);
+        res.status(500).json({ message: "Server error fetching paper details." });
+    }
+};
+
+export { createOrUpdateQuestion, getQuestionById, getDraftQuestions, deleteQuestions, submitQuestionsForApproval, getSubmittedQuestions , getAvailablePapers,claimPaper,getClaimedPapers,getAllCourses,getClaimedPapersByMaker,getQuestionPaperById};

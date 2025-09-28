@@ -249,7 +249,7 @@ const getQuestionById = async (req, res) => {
 
             // Populate the 'questionPaper' and select both its 'name' and 'url'.
             // This is the key change to send the PDF URL to the frontend.
-            .populate("questionPaper", "name url");
+            .populate("questionPaper", "name solutionPaperFile questionPaperFile");
 
         if (!question) {
             return res.status(404).json({ message: "Question not found." });

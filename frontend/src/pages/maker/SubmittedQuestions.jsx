@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
-import { host } from "../../utils/APIRoutes"; 
+import { useNavigate } from "react-router-dom"; // Import useNavigate
+import { host } from "../../utils/APIRoutes";
+
 // --- Reusable Components ---
 
-// UPDATED: Now smaller and triggers a modal on click.
 const ContentDisplay = ({ content, onImageClick }) => {
   if (!content || (!content.text && !content.image)) {
     return <p className="text-gray-400 italic">N/A</p>;
@@ -49,7 +50,8 @@ export default function SubmittedQuestions() {
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedComments, setSelectedComments] = useState(null);
-  const [imageInView, setImageInView] = useState(null); // State for image modal
+  const [imageInView, setImageInView] = useState(null);
+  const navigate = useNavigate(); // Initialize useNavigate hook
 
   // Filters
   const [search, setSearch] = useState("");
@@ -60,12 +62,10 @@ export default function SubmittedQuestions() {
     const fetchQuestions = async () => {
       try {
         const token = localStorage.getItem("token");
-        // This endpoint should populate 'course' and 'questionPaper'
         const res = await axios.get(`${host}/api/questions/submitted`, {
           headers: { Authorization: `Bearer ${token}` },
         });
 
-        console.log(res.data)
         const formatted = res.data.map((q) => ({
           ...q,
           status:
@@ -81,13 +81,11 @@ export default function SubmittedQuestions() {
     fetchQuestions();
   }, []);
 
-  // Get unique course titles for the filter dropdown
   const courses = [
     "All",
     ...new Set(questions.map((q) => q.course?.title).filter(Boolean)),
   ];
 
-  // Apply search and filters
   const filteredQuestions = questions.filter((q) => {
     const textToSearch = (q.question?.text || "").toLowerCase();
     const matchesSearch = textToSearch.includes(search.toLowerCase().trim());
@@ -210,13 +208,24 @@ export default function SubmittedQuestions() {
                       <StatusBadge status={q.status} />
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      {/* --- UPDATED: Actions column --- */}
                       {q.status === "Rejected" && (
-                        <button
-                          onClick={() => setSelectedComments(q.checkerComments)}
-                          className="text-indigo-600 hover:text-indigo-900"
-                        >
-                          View Comments
-                        </button>
+                        <div className="flex items-center gap-4">
+                          <button
+                            onClick={() =>
+                              setSelectedComments(q.checkerComments)
+                            }
+                            className="text-indigo-600 hover:text-indigo-900"
+                          >
+                            View Comments
+                          </button>
+                          <button
+                            onClick={() => navigate(`/maker/create/${q._id}`)}
+                            className="text-blue-600 hover:text-blue-900"
+                          >
+                            Edit
+                          </button>
+                        </div>
                       )}
                     </td>
                   </tr>
