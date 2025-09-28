@@ -2,6 +2,7 @@ import Question from "../models/Question.js";
 import QuestionPaper from "../models/QuestionPaper.js";
 import mongoose from "mongoose";
 import Checker from "../models/Checker.js";
+import Maker from "../models/Maker.js";
 
 const getPendingQuestions = async (req, res) => {
     try {
@@ -32,7 +33,6 @@ const getPendingQuestions = async (req, res) => {
 const approveQuestion = async (req, res) => {
     const { id } = req.params;
     const checkerId = req.user._id;
-
     const session = await mongoose.startSession();
     session.startTransaction();
 
@@ -58,14 +58,21 @@ const approveQuestion = async (req, res) => {
             { $inc: { acceptedquestioncount: 1 } },
             { session }
         );
+        // --- NEW STEP: Increment the accepted question count for the maker ---
+        await Maker.findByIdAndUpdate(
+            question.maker, // Get the maker's ID from the updated question
+            { $inc: { acceptedquestions: 1 } },
+            { session }
+        );
+        // --- END OF NEW STEP ---
 
-        // 3. If both succeed, commit the transaction
+        // 4. If all operations succeed, commit the transaction
         await session.commitTransaction();
 
         res.json(question);
 
     } catch (err) {
-        // 4. If any error occurs, abort the transaction
+        // 5. If any error occurs, abort the transaction
         await session.abortTransaction();
 
         console.error("Error in approveQuestion transaction:", err);
@@ -76,29 +83,26 @@ const approveQuestion = async (req, res) => {
 
         res.status(500).json({ message: "Server error during approval. The operation was rolled back." });
     } finally {
-        // 5. Always end the session
+        // 6. Always end the session
         session.endSession();
     }
 };
-
 
 const rejectQuestion = async (req, res) => {
     const { id } = req.params;
     const { comments } = req.body;
     const checkerId = req.user._id;
 
-    // Start a Mongoose session for the transaction
     const session = await mongoose.startSession();
     session.startTransaction();
 
     try {
         // 1. Validate input
         if (!comments || comments.trim() === "") {
-            // Throwing an error here will be caught and will abort the transaction
             throw new Error("Comments are required for rejection.");
         }
 
-        // 2. Update the question document within the transaction
+        // 2. Update the question document
         const question = await Question.findByIdAndUpdate(
             id,
             {
@@ -106,33 +110,39 @@ const rejectQuestion = async (req, res) => {
                 checkerComments: comments,
                 checkedBy: checkerId
             },
-            { new: true, session } // Pass the session to this operation
+            { new: true, session }
         );
 
         if (!question) {
             throw new Error("Question not found.");
         }
 
-        // 3. Increment the rejected question count for the checker within the transaction
-        // Using the $inc operator is atomic and efficient.
+        // 3. Increment the rejected question count for the checker
         await Checker.findByIdAndUpdate(
             checkerId,
             { $inc: { rejectedquestioncount: 1 } },
-            { session } // Pass the session to this operation
+            { session }
         );
 
-        // 4. If both operations succeed, commit the transaction
+        // --- NEW STEP: Increment the rejected question count for the maker ---
+        await Maker.findByIdAndUpdate(
+            question.maker, // Get the maker's ID from the updated question
+            { $inc: { rejectedquestions: 1 } },
+            { session }
+        );
+        // --- END OF NEW STEP ---
+
+        // 5. If all operations succeed, commit the transaction
         await session.commitTransaction();
 
         res.json(question);
 
     } catch (err) {
-        // 5. If any error occurs, abort the transaction to roll back all changes
+        // 6. If any error occurs, abort the transaction
         await session.abortTransaction();
 
         console.error("Error in rejectQuestion transaction:", err);
 
-        // Send appropriate error responses
         if (err.message.includes("Comments are required")) {
             return res.status(400).json({ message: err.message });
         }
@@ -142,7 +152,7 @@ const rejectQuestion = async (req, res) => {
 
         res.status(500).json({ message: "Server error during rejection. The operation was rolled back." });
     } finally {
-        // 6. Always end the session
+        // 7. Always end the session
         session.endSession();
     }
 };
@@ -182,7 +192,28 @@ const bulkApproveQuestions = async (req, res) => {
             throw new Error("An array of question IDs is required.");
         }
 
-        // 2. Update all matching questions within the transaction
+        // --- NEW: Find the questions first to identify the makers ---
+        // We only need the 'maker' field from each question
+        const questionsToApprove = await Question.find(
+            { _id: { $in: ids }, status: "Pending" },
+            'maker' // This projection returns only the _id and maker fields
+        ).session(session); // Run this query within the transaction
+
+        if (questionsToApprove.length === 0) {
+            // Abort the transaction and notify the user
+            await session.abortTransaction();
+            return res.status(404).json({ message: "No matching pending questions were found to approve." });
+        }
+
+        // --- NEW: Aggregate how many questions belong to each maker ---
+        const makerCounts = {};
+        for (const question of questionsToApprove) {
+            const makerId = question.maker.toString();
+            // If the makerId is already a key, increment its value, otherwise initialize to 1
+            makerCounts[makerId] = (makerCounts[makerId] || 0) + 1;
+        }
+
+        // 2. Update all matching questions
         const result = await Question.updateMany(
             { _id: { $in: ids }, status: "Pending" },
             {
@@ -195,18 +226,29 @@ const bulkApproveQuestions = async (req, res) => {
             { session }
         );
 
-        // 3. If questions were modified, increment the checker's count
+        // 3. Increment the checker's count
+        // This should always be > 0 because of our check above
         if (result.modifiedCount > 0) {
             await Checker.findByIdAndUpdate(
                 checkerId,
                 { $inc: { acceptedquestioncount: result.modifiedCount } },
                 { session }
             );
-        } else {
-            // If no documents were modified, it's not an error, but we can inform the client.
-            // We can let the transaction commit safely.
-            return res.status(404).json({ message: "No matching pending questions were found to approve." });
         }
+
+        // --- NEW: Update all relevant makers' counts ---
+        const makerUpdatePromises = [];
+        for (const makerId in makerCounts) {
+            const count = makerCounts[makerId];
+            makerUpdatePromises.push(
+                Maker.findByIdAndUpdate(
+                    makerId,
+                    { $inc: { acceptedquestions: count } },
+                    { session }
+                )
+            );
+        }
+        await Promise.all(makerUpdatePromises);
 
         // 4. If all operations succeed, commit the transaction
         await session.commitTransaction();
