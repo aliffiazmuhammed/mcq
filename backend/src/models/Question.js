@@ -61,15 +61,10 @@ const questionSchema = new mongoose.Schema(
         ],
         explanation: TextImageSchema,
 
-        // --- UPDATED REFERENCE FIELD ---
-        /**
-         * @desc An object to store URLs for up to two reference images.
-         */
         reference: {
             image1: { type: String, default: null },
             image2: { type: String, default: null },
         },
-        // --- END OF UPDATE ---
 
         complexity: {
             type: String,
@@ -88,6 +83,11 @@ const questionSchema = new mongoose.Schema(
             default: QUESTION_STATUS.PENDING,
         },
         checkerComments: String,
+
+        // --- NEWLY ADDED FIELD ---
+        makerComments: String,
+        // -------------------------
+
         checkedBy: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "Checker",
