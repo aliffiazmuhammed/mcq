@@ -29,6 +29,7 @@ import ClaimedPdfsPage from "./pages/maker/ClaimedPdfsPage";
 import ShowQuestionPaper from "./pages/checker/ShowQuestionPaper";
 import CreateCoursePage from "./pages/admin/CreateCoursePage";
 import ViewCoursesPage from "./pages/admin/ViewCoursesPage";
+import EditRejectedQuestion from "./pages/maker/EditRejectedQuestion";
 
 function PrivateRoute({ children, role }) {
   const { user, loading } = useAuth();
@@ -95,6 +96,7 @@ export default function App() {
           >
             <Route path="create" element={<CreateQuestion />} />
             <Route path="create/:id" element={<CreateQuestion />} />
+            <Route path="editrejected/:id" element={<EditRejectedQuestion />} />
             <Route path="drafts" element={<DraftQuestions />} />
             <Route path="submitted" element={<SubmittedQuestions />} />
             <Route path="availabe-pdfs" element={<AvailablePdfsPage />} />

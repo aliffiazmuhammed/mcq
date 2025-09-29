@@ -220,7 +220,9 @@ export default function SubmittedQuestions() {
                             View Comments
                           </button>
                           <button
-                            onClick={() => navigate(`/maker/create/${q._id}`)}
+                            onClick={() =>
+                              navigate(`/maker/editrejected/${q._id}`)
+                            }
                             className="text-blue-600 hover:text-blue-900"
                           >
                             Edit
