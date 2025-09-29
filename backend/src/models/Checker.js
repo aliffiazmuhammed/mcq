@@ -1,5 +1,18 @@
 import mongoose from "mongoose";
 
+// A sub-schema to track a question and a count associated with it.
+const QuestionHistorySchema = new mongoose.Schema({
+    questionId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Question',
+        required: true
+    },
+    count: {
+        type: Number,
+        default: 1
+    }
+}, { _id: false }); // No separate _id for sub-documents in this array
+
 const checkerSchema = new mongoose.Schema(
     {
         name: {
@@ -10,7 +23,6 @@ const checkerSchema = new mongoose.Schema(
             type: String,
             required: [true, "Please add an email"],
             unique: true,
-            // A simple regex for basic email validation
             match: [
                 /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/,
                 "Please add a valid email",
@@ -19,19 +31,17 @@ const checkerSchema = new mongoose.Schema(
         password: {
             type: String,
             required: [true, "Please add a password"],
-            minlength: 6, // Enforces a minimum password length
-            select: false, // Prevents password from being returned in queries
+            minlength: 6,
+            select: false,
         },
-        // --- ADDED FIELDS ---
-        rejectedquestioncount: {
-            type: Number,
-            default: 0, // Default to 0 for new checkers
-        },
-        acceptedquestioncount: {
-            type: Number,
-            default: 0, // Default to 0 for new checkers
-        },
-        // --- END OF ADDED FIELDS ---
+
+        // --- UPDATED FIELDS: Now an array of objects with questionId and count ---
+
+        checkeracceptedquestion: [QuestionHistorySchema],
+        checkerrejectedquestion: [QuestionHistorySchema],
+        checkerfalserejections: [QuestionHistorySchema],
+
+        // --- END OF UPDATED FIELDS ---
     },
     { timestamps: true }
 );

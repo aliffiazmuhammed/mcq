@@ -37,7 +37,7 @@ export const AuthProvider = ({ children }) => {
       if (roleType === "maker") endpoint += "/maker";
       else if (roleType === "checker") endpoint += "/checker";
       else endpoint += "/admin";
-
+      console.log(roleType)
       const res = await axios.post(endpoint, { email, password });
 
       if (res.data.token) {
@@ -45,7 +45,7 @@ export const AuthProvider = ({ children }) => {
         setToken(res.data.token);
 
         const decoded = jwtDecode(res.data.token);
-
+        console.log(decoded.type)
         // store role in localStorage
         localStorage.setItem("role", decoded.type);
 
@@ -66,6 +66,7 @@ export const AuthProvider = ({ children }) => {
   const logout = (navigate) => {
     const role = user?.role;
     localStorage.removeItem("token");
+    localStorage.removeItem("role");
     setUser(null);
     setToken(null);
 

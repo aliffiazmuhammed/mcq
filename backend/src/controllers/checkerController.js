@@ -32,61 +32,98 @@ const getPendingQuestions = async (req, res) => {
 // Approve a question
 const approveQuestion = async (req, res) => {
     const { id } = req.params;
-    const checkerId = req.user._id;
+    const currentCheckerId = req.user._id; // The checker performing the approval
+
     const session = await mongoose.startSession();
     session.startTransaction();
 
     try {
-        // 1. Update the question document
-        const question = await Question.findByIdAndUpdate(
+        // 1. Find the question *before* updating to check its prior state
+        const questionToApprove = await Question.findById(id).session(session);
+
+        if (!questionToApprove) {
+            throw new Error("Question not found.");
+        }
+
+        const originalCheckerId = questionToApprove.checkedBy;
+        const makerId = questionToApprove.maker;
+        const questionId = questionToApprove._id;
+
+        // 2. Check for the "false rejection" condition
+        if (questionToApprove.makerComments === "No corrections required") {
+            if (originalCheckerId) {
+                // First, try to find and increment the count for this question
+                const result = await Checker.updateOne(
+                    { _id: originalCheckerId, "checkerfalserejections.questionId": questionId },
+                    { $inc: { "checkerfalserejections.$.count": 1 } },
+                    { session }
+                );
+                // If no document was updated, it means the question isn't in the array yet, so add it.
+                if (result.modifiedCount === 0) {
+                    await Checker.findByIdAndUpdate(
+                        originalCheckerId,
+                        { $push: { checkerfalserejections: { questionId: questionId, count: 1 } } },
+                        { session }
+                    );
+                }
+            }
+        }
+
+        // 3. Update the question document itself
+        const updatedQuestion = await Question.findByIdAndUpdate(
             id,
             {
                 status: "Approved",
-                checkerComments: "", // Clear any previous rejection comments
-                checkedBy: checkerId
+                checkedBy: currentCheckerId,
+                checkerComments: "",
             },
             { new: true, session }
         );
 
-        if (!question) {
-            throw new Error("Question not found.");
+        // 4. Update the current checker's accepted list
+        const checkerResult = await Checker.updateOne(
+            { _id: currentCheckerId, "checkeracceptedquestion.questionId": questionId },
+            { $inc: { "checkeracceptedquestion.$.count": 1 } },
+            { session }
+        );
+        if (checkerResult.modifiedCount === 0) {
+            await Checker.findByIdAndUpdate(
+                currentCheckerId,
+                { $push: { checkeracceptedquestion: { questionId: questionId } } }, // default count is 1
+                { session }
+            );
         }
 
-        // 2. Increment the accepted question count for the checker
-        await Checker.findByIdAndUpdate(
-            checkerId,
-            { $inc: { acceptedquestioncount: 1 } },
+        // 5. Update the maker's accepted list
+        const makerResult = await Maker.updateOne(
+            { _id: makerId, "makeracceptedquestions.questionId": questionId },
+            { $inc: { "makeracceptedquestions.$.count": 1 } },
             { session }
         );
-        // --- NEW STEP: Increment the accepted question count for the maker ---
-        await Maker.findByIdAndUpdate(
-            question.maker, // Get the maker's ID from the updated question
-            { $inc: { acceptedquestions: 1 } },
-            { session }
-        );
-        // --- END OF NEW STEP ---
+        if (makerResult.modifiedCount === 0) {
+            await Maker.findByIdAndUpdate(
+                makerId,
+                { $push: { makeracceptedquestions: { questionId: questionId } } }, // default count is 1
+                { session }
+            );
+        }
 
-        // 4. If all operations succeed, commit the transaction
+        // 7. If all operations succeed, commit the transaction
         await session.commitTransaction();
-
-        res.json(question);
+        res.json(updatedQuestion);
 
     } catch (err) {
-        // 5. If any error occurs, abort the transaction
         await session.abortTransaction();
-
         console.error("Error in approveQuestion transaction:", err);
-
         if (err.message.includes("not found")) {
             return res.status(404).json({ message: err.message });
         }
-
         res.status(500).json({ message: "Server error during approval. The operation was rolled back." });
     } finally {
-        // 6. Always end the session
         session.endSession();
     }
 };
+
 
 const rejectQuestion = async (req, res) => {
     const { id } = req.params;
@@ -117,20 +154,38 @@ const rejectQuestion = async (req, res) => {
             throw new Error("Question not found.");
         }
 
-        // 3. Increment the rejected question count for the checker
-        await Checker.findByIdAndUpdate(
-            checkerId,
-            { $inc: { rejectedquestioncount: 1 } },
-            { session }
-        );
+        const questionId = question._id;
+        const makerId = question.maker;
 
-        // --- NEW STEP: Increment the rejected question count for the maker ---
-        await Maker.findByIdAndUpdate(
-            question.maker, // Get the maker's ID from the updated question
-            { $inc: { rejectedquestions: 1 } },
+        // 3. Update the checker's rejected list
+        // First, try to find and increment the count for this question
+        const checkerResult = await Checker.updateOne(
+            { _id: checkerId, "checkerrejectedquestion.questionId": questionId },
+            { $inc: { "checkerrejectedquestion.$.count": 1 } },
             { session }
         );
-        // --- END OF NEW STEP ---
+        // If no document was updated, it means the question isn't in the array yet, so add it.
+        if (checkerResult.modifiedCount === 0) {
+            await Checker.findByIdAndUpdate(
+                checkerId,
+                { $push: { checkerrejectedquestion: { questionId: questionId } } }, // default count is 1
+                { session }
+            );
+        }
+
+        // 4. Update the maker's rejected list
+        const makerResult = await Maker.updateOne(
+            { _id: makerId, "makerrejectedquestions.questionId": questionId },
+            { $inc: { "makerrejectedquestions.$.count": 1 } },
+            { session }
+        );
+        if (makerResult.modifiedCount === 0) {
+            await Maker.findByIdAndUpdate(
+                makerId,
+                { $push: { makerrejectedquestions: { questionId: questionId } } }, // default count is 1
+                { session }
+            );
+        }
 
         // 5. If all operations succeed, commit the transaction
         await session.commitTransaction();
@@ -140,7 +195,6 @@ const rejectQuestion = async (req, res) => {
     } catch (err) {
         // 6. If any error occurs, abort the transaction
         await session.abortTransaction();
-
         console.error("Error in rejectQuestion transaction:", err);
 
         if (err.message.includes("Comments are required")) {
@@ -149,7 +203,6 @@ const rejectQuestion = async (req, res) => {
         if (err.message.includes("not found")) {
             return res.status(404).json({ message: err.message });
         }
-
         res.status(500).json({ message: "Server error during rejection. The operation was rolled back." });
     } finally {
         // 7. Always end the session
@@ -181,7 +234,7 @@ const getReviewedQuestions = async (req, res) => {
 
 const bulkApproveQuestions = async (req, res) => {
     const { ids } = req.body;
-    const checkerId = req.user._id;
+    const currentCheckerId = req.user._id;
 
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -192,82 +245,120 @@ const bulkApproveQuestions = async (req, res) => {
             throw new Error("An array of question IDs is required.");
         }
 
-        // --- NEW: Find the questions first to identify the makers ---
-        // We only need the 'maker' field from each question
+        // 2. Find all valid questions to get their makers, original checkers, and comments
         const questionsToApprove = await Question.find(
             { _id: { $in: ids }, status: "Pending" },
-            'maker' // This projection returns only the _id and maker fields
-        ).session(session); // Run this query within the transaction
+            'maker checkedBy makerComments' // Projection to get all needed fields
+        ).session(session);
 
         if (questionsToApprove.length === 0) {
-            // Abort the transaction and notify the user
             await session.abortTransaction();
             return res.status(404).json({ message: "No matching pending questions were found to approve." });
         }
 
-        // --- NEW: Aggregate how many questions belong to each maker ---
-        const makerCounts = {};
-        for (const question of questionsToApprove) {
-            const makerId = question.maker.toString();
-            // If the makerId is already a key, increment its value, otherwise initialize to 1
-            makerCounts[makerId] = (makerCounts[makerId] || 0) + 1;
+        const approvedQuestionIds = questionsToApprove.map(q => q._id);
+
+        // 3. Aggregate data for various updates
+        const makerQuestionIds = {};           // Groups questions by maker for acceptance update
+        const falseRejectionsByChecker = {}; // Groups questions by original checker for false rejection update
+        const cleanupData = {};              // Groups questions by original checker/maker for rejection list cleanup
+
+        for (const q of questionsToApprove) {
+            const makerId = q.maker.toString();
+            const questionId = q._id;
+            const originalCheckerId = q.checkedBy ? q.checkedBy.toString() : null;
+
+            // Group for maker acceptance
+            if (!makerQuestionIds[makerId]) makerQuestionIds[makerId] = [];
+            makerQuestionIds[makerId].push(questionId);
+
+            // Group for false rejection logging if the condition is met
+            if (q.makerComments === "No corrections required" && originalCheckerId) {
+                if (!falseRejectionsByChecker[originalCheckerId]) falseRejectionsByChecker[originalCheckerId] = [];
+                falseRejectionsByChecker[originalCheckerId].push(questionId);
+            }
+
+            // Group for cleanup if the question was previously rejected (indicated by makerComments)
+            if (q.makerComments && originalCheckerId) {
+                if (!cleanupData[originalCheckerId]) cleanupData[originalCheckerId] = { checker: [], maker: {} };
+                if (!cleanupData[originalCheckerId].maker[makerId]) cleanupData[originalCheckerId].maker[makerId] = [];
+                cleanupData[originalCheckerId].checker.push(questionId);
+                cleanupData[originalCheckerId].maker[makerId].push(questionId);
+            }
         }
 
-        // 2. Update all matching questions
+        // 4. Update the status of all questions
         const result = await Question.updateMany(
-            { _id: { $in: ids }, status: "Pending" },
-            {
-                $set: {
-                    status: "Approved",
-                    checkedBy: checkerId,
-                    checkerComments: ""
-                }
-            },
+            { _id: { $in: approvedQuestionIds } },
+            { $set: { status: "Approved", checkedBy: currentCheckerId, checkerComments: "" } },
             { session }
         );
 
-        // 3. Increment the checker's count
-        // This should always be > 0 because of our check above
-        if (result.modifiedCount > 0) {
-            await Checker.findByIdAndUpdate(
-                checkerId,
-                { $inc: { acceptedquestioncount: result.modifiedCount } },
+        // Create an array to hold all concurrent database update promises
+        const updatePromises = [];
+
+        // 5. Update the current checker's accepted list
+        for (const questionId of approvedQuestionIds) {
+            const promise = Checker.updateOne(
+                { _id: currentCheckerId, "checkeracceptedquestion.questionId": questionId },
+                { $inc: { "checkeracceptedquestion.$.count": 1 } },
                 { session }
-            );
+            ).then(res => {
+                if (res.modifiedCount === 0) {
+                    return Checker.findByIdAndUpdate(currentCheckerId, { $push: { checkeracceptedquestion: { questionId } } }, { session });
+                }
+            });
+            updatePromises.push(promise);
         }
 
-        // --- NEW: Update all relevant makers' counts ---
-        const makerUpdatePromises = [];
-        for (const makerId in makerCounts) {
-            const count = makerCounts[makerId];
-            makerUpdatePromises.push(
-                Maker.findByIdAndUpdate(
-                    makerId,
-                    { $inc: { acceptedquestions: count } },
+        // 6. Update each maker's accepted list
+        for (const makerId in makerQuestionIds) {
+            for (const questionId of makerQuestionIds[makerId]) {
+                const promise = Maker.updateOne(
+                    { _id: makerId, "makeracceptedquestions.questionId": questionId },
+                    { $inc: { "makeracceptedquestions.$.count": 1 } },
                     { session }
-                )
-            );
+                ).then(res => {
+                    if (res.modifiedCount === 0) {
+                        return Maker.findByIdAndUpdate(makerId, { $push: { makeracceptedquestions: { questionId } } }, { session });
+                    }
+                });
+                updatePromises.push(promise);
+            }
         }
-        await Promise.all(makerUpdatePromises);
 
-        // 4. If all operations succeed, commit the transaction
+        // 7. Update false rejection lists
+        for (const checkerId in falseRejectionsByChecker) {
+            for (const questionId of falseRejectionsByChecker[checkerId]) {
+                const promise = Checker.updateOne(
+                    { _id: checkerId, "checkerfalserejections.questionId": questionId },
+                    { $inc: { "checkerfalserejections.$.count": 1 } },
+                    { session }
+                ).then(res => {
+                    if (res.modifiedCount === 0) {
+                        return Checker.findByIdAndUpdate(checkerId, { $push: { checkerfalserejections: { questionId } } }, { session });
+                    }
+                });
+                updatePromises.push(promise);
+            }
+        }
+
+        // Execute all updates concurrently
+        await Promise.all(updatePromises);
+
+        // 9. If everything succeeds, commit the transaction
         await session.commitTransaction();
 
         res.json({ message: `${result.modifiedCount} question(s) have been successfully approved.` });
 
     } catch (err) {
-        // 5. If any error occurs, abort the transaction
         await session.abortTransaction();
-
         console.error("Error during bulk approval transaction:", err);
-
         if (err.message.includes("IDs is required")) {
             return res.status(400).json({ message: err.message });
         }
-
         res.status(500).json({ message: "A server error occurred. The bulk approval was rolled back." });
     } finally {
-        // 6. Always end the session
         session.endSession();
     }
 };
@@ -319,7 +410,7 @@ const getPapers = async (req, res) => {
         const claimedPapers = await QuestionPaper.find({ usedBy: { $ne: null } })
             .populate("usedBy", "name") // CRITICAL: Get the name of the maker who claimed it.
             .sort({ updatedAt: -1 });  // Show the most recently claimed papers first.
-
+console.log(claimedPapers)
         res.json(claimedPapers);
     } catch (err) {
         console.error("Error fetching claimed papers:", err);

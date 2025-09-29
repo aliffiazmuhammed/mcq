@@ -5,6 +5,7 @@ import QuestionPaper from "../models/QuestionPaper.js";
 import Course from "../models/Course.js"
 import mongoose from 'mongoose';
 import Maker from "../models/Maker.js";
+import Checker from "../models/Checker.js";
 
 const createOrUpdateQuestion = async (req, res) => {
     const session = await mongoose.startSession();
@@ -14,13 +15,13 @@ const createOrUpdateQuestion = async (req, res) => {
         const {
             _id, course, unit, subject, chapter, questionText,
             questionPaper, questionNumber, correctAnswer, explanation,
-            complexity, keywords, status, makerComments, makerCommentIndex, // Destructure new fields
+            complexity, keywords, status, makerComments, makerCommentIndex,
             existingQuestionImage, existingExplanationImage,
             existingReferenceImage1, existingReferenceImage2,
-            existingChoiceImages, questionPaperYear
+            existingChoiceImages, questionPaperYear, choicesText, hasImage
         } = req.body;
 
-        // --- Find Course ID (logic remains the same) ---
+        // --- Find Course ID ---
         let courseId;
         if (mongoose.Types.ObjectId.isValid(course)) {
             courseId = course;
@@ -30,7 +31,7 @@ const createOrUpdateQuestion = async (req, res) => {
             courseId = courseDoc._id;
         }
 
-        // --- Cloudinary Upload Helper (logic remains the same) ---
+        // --- Cloudinary Upload Helper ---
         const uploadToCloudinary = async (file) => {
             if (!file) return null;
             const base64 = `data:${file.mimetype};base64,${file.buffer.toString("base64")}`;
@@ -38,62 +39,94 @@ const createOrUpdateQuestion = async (req, res) => {
             return result.secure_url;
         };
 
-        // --- Image Processing (logic remains the same) ---
+        // --- Image and Choices Processing ---
         const questionImage = req.files?.questionImage ? await uploadToCloudinary(req.files.questionImage[0]) : (existingQuestionImage || null);
         const explanationImage = req.files?.explanationImage ? await uploadToCloudinary(req.files.explanationImage[0]) : (existingExplanationImage || null);
         const referenceImageUrl1 = req.files?.referenceImage1 ? await uploadToCloudinary(req.files.referenceImage1[0]) : (existingReferenceImage1 || null);
         const referenceImageUrl2 = req.files?.referenceImage2 ? await uploadToCloudinary(req.files.referenceImage2[0]) : (existingReferenceImage2 || null);
-        // ... (choices image processing logic remains the same) ...
+
+        let choiceTextsArr = choicesText || [];
+        if (!Array.isArray(choiceTextsArr)) choiceTextsArr = [choiceTextsArr];
+        const hasImageFlags = hasImage || [];
+        const choiceFiles = req.files?.choicesImage || [];
+        let existingImages = existingChoiceImages || [];
+        if (existingImages && !Array.isArray(existingImages)) existingImages = [existingImages];
+        const newImageUrls = await Promise.all((choiceFiles || []).map(file => uploadToCloudinary(file)));
+
+        let fileCounter = 0;
+        const finalImageUrls = hasImageFlags.map((hasImg, i) => {
+            if (hasImg !== 'true') return null;
+            return existingImages[i] || newImageUrls[fileCounter++];
+        });
+
+        const mappedChoices = choiceTextsArr.map((text, i) => ({
+            text: text || "",
+            image: finalImageUrls[i],
+            isCorrect: Number(correctAnswer) === i,
+        }));
 
         // --- Construct Question Data Object ---
         const questionData = {
-            course: courseId, unit, subject, chapter, questionPaperYear,
+            course: courseId, unit, subject, chapter, questionPaperYear, questionPaper, questionNumber,
             question: { text: questionText || "", image: questionImage },
-            // options: mappedChoices, // Assume mappedChoices is constructed as before
+            options: mappedChoices,
             explanation: { text: explanation || "", image: explanationImage },
             reference: { image1: referenceImageUrl1, image2: referenceImageUrl2 },
             complexity,
             keywords: keywords ? keywords.split(",").map(k => k.trim()) : [],
             status: status || 'Draft',
-            makerComments: makerComments || "", // Save the new maker comment
-            // Other fields...
+            makerComments: makerComments || "",
         };
 
         let question;
+        const makerId = req.user._id;
 
         if (_id) { // This is an UPDATE or RESUBMISSION
-            // **NEW LOGIC STARTS HERE**
-            // 1. Fetch the original question to check its status before updating
             const originalQuestion = await Question.findById(_id).session(session);
-            if (!originalQuestion) {
-                throw new Error("Question not found for update.");
-            }
-            // 2. Check for the specific condition
-            // makerCommentIndex '1' corresponds to "No corrections required"
+            if (!originalQuestion) throw new Error("Question not found for update.");
+
+            const originalCheckerId = originalQuestion.checkedBy;
+
+            // Condition: Resubmitting a rejected question with "No corrections required"
             if (originalQuestion.status === 'Rejected' && Number(makerCommentIndex) === 1) {
-                // If condition is met, decrement the maker's rejected count
-                await Maker.findByIdAndUpdate(
-                    originalQuestion.maker,
-                    { $inc: { rejectedquestions: -1 } },
+                // Remove the question from the maker's rejected list
+                await Maker.updateOne(
+                    { _id: makerId, "makerrejectedquestions.questionId": _id },
+                    { $inc: { "makerrejectedquestions.$.count": -1 } },
                     { session }
                 );
             }
-            // **NEW LOGIC ENDS HERE**
 
-            // 3. Proceed with updating the question document
+            // Condition: Submitting a draft for the first time
+            if (originalQuestion.status === 'Draft' && status === 'Pending') {
+                await Maker.findByIdAndUpdate(
+                    makerId,
+                    { $pull: { makerdraftedquestions: { questionId: _id } } },
+                    { session }
+                );
+            }
+
             question = await Question.findByIdAndUpdate(_id, questionData, { new: true, session });
 
-            await session.commitTransaction();
-            return res.json({ message: "Question updated successfully", question });
-
         } else { // This is a NEW question
-            questionData.maker = req.user._id;
+            questionData.maker = makerId;
             question = new Question(questionData);
             await question.save({ session });
 
-            await session.commitTransaction();
-            return res.status(201).json({ message: "Question created successfully", question });
+            // If saved as a draft, add it to the maker's drafted list
+            if (question.status === 'Draft') {
+                await Maker.findByIdAndUpdate(
+                    makerId,
+                    { $push: { makerdraftedquestions: { questionId: question._id } } },
+                    { session }
+                );
+            }
         }
+
+        await session.commitTransaction();
+        const message = _id ? "Question updated successfully" : "Question created successfully";
+        res.status(_id ? 200 : 201).json({ message, question });
+
     } catch (err) {
         await session.abortTransaction();
         console.error("Error in createOrUpdateQuestion:", err);
