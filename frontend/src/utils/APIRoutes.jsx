@@ -1,1 +1,1 @@
-export const host = "http://localhost:5000";
+export const host = "https://mcq-cu9r.vercel.app";

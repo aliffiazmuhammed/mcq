@@ -32,6 +32,7 @@ import ViewCoursesPage from "./pages/admin/ViewCoursesPage";
 import EditRejectedQuestion from "./pages/maker/EditRejectedQuestion";
 import MakerDashboard from "./pages/maker/MakerDashboard";
 import CheckerDashboard from "./pages/checker/CheckerDashboard";
+import { Toaster } from "react-hot-toast";
 
 function PrivateRoute({ children, role }) {
   const { user, loading } = useAuth();
@@ -63,6 +64,7 @@ function PrivateRoute({ children, role }) {
 export default function App() {
   return (
     <AuthProvider>
+      <Toaster position="top-center" reverseOrder={false} />
       <Router>
         <Routes>
           {/* Public */}

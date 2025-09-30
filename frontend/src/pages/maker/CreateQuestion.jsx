@@ -4,7 +4,7 @@ import Modal from "https://esm.sh/react-modal";
 import axios from "axios";
 import { useParams, useNavigate } from "react-router-dom";
 import { host } from "../../utils/APIRoutes";
-
+import toast from "react-hot-toast";
 /**
  * Utility function to crop an image based on pixel crop values.
  * @param {string} imageSrc - The source of the image to crop.
@@ -698,6 +698,7 @@ export default function CreateQuestion() {
   const handleSubmit = useCallback(
     async (type) => {
       setLoading(true);
+      const toastId = toast.loading(`Submitting question as ${type}...`);
       try {
         const formPayload = new FormData();
         if (formData._id) formPayload.append("_id", formData._id);
@@ -768,14 +769,19 @@ export default function CreateQuestion() {
             "Content-Type": "multipart/form-data",
           },
         });
+const successMessage = `Question ${
+  type === "Draft" ? "saved as draft" : "submitted"
+} successfully!`;
 
+toast.success(successMessage, { id: toastId });
         console.log(
           `Question ${
             type === "Draft" ? "saved as draft" : "submitted"
           } successfully!`
         );
-window.location.reload();
-        navigate("/maker/create");
+setTimeout(() => {
+  window.location.reload();
+}, 1500);
       } catch (err) {
         console.error("Error submitting question:", err);
       } finally {
