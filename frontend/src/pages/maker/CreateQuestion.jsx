@@ -774,7 +774,7 @@ export default function CreateQuestion() {
             type === "Draft" ? "saved as draft" : "submitted"
           } successfully!`
         );
-
+window.location.reload();
         navigate("/maker/create");
       } catch (err) {
         console.error("Error submitting question:", err);
