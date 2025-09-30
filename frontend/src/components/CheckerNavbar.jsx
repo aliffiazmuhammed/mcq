@@ -13,6 +13,7 @@ export default function CheckerNavbar() {
     { name: "Review Questions", path: "/checker/review", icon: "📝" },
     { name: "Reviewd Questions", path: "/checker/accepted", icon: "✅" },
     { name: "Question Papers", path: "/checker/claimed-pdfs", icon: "📗" },
+    { name: "Dashboard", path: "/checker/dashboard", icon: "📊" },
   ];
 
   return (

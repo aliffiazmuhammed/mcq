@@ -278,85 +278,197 @@ const deletePdf = async (req, res) => {
 };
 
 
+
+// Helper function to create a date range based on the query parameters
+const getDateRange = (timeframe, start, end) => {
+    const now = new Date();
+    let startDate = new Date(0); // Default to the beginning of time for 'all'
+    let endDate = now;
+
+    if (timeframe === 'weekly') {
+        startDate = new Date();
+        startDate.setDate(now.getDate() - 7);
+    } else if (timeframe === 'monthly') {
+        startDate = new Date();
+        startDate.setMonth(now.getMonth() - 1);
+    } else if (timeframe === 'custom' && start && end) {
+        startDate = new Date(start);
+        endDate = new Date(end);
+        // Ensure the end date covers the entire day
+        endDate.setHours(23, 59, 59, 999);
+    }
+    return { startDate, endDate };
+};
+
 const getDashboardStats = async (req, res) => {
     try {
-        // 1. Get Summary Card Counts in parallel for speed
-        const [totalQuestions, totalApproved, totalRejected, totalPending] = await Promise.all([
-            Question.countDocuments(),
-            Question.countDocuments({ status: 'Approved' }),
-            Question.countDocuments({ status: 'Rejected' }),
+        const { timeframe = 'all', startDate: start, endDate: end } = req.query;
+        // This helper function is assumed to return a valid { startDate, endDate } object
+        const { startDate, endDate } = getDateRange(timeframe, start, end);
+
+        // --- 1. Summary Card Statistics (No changes needed here) ---
+        const [
+            totalQuestions,
+            totalApproved,
+            totalRejected,
+            totalResubmitted,
+            totalPending,
+        ] = await Promise.all([
+            Question.countDocuments({ createdAt: { $gte: startDate, $lte: endDate } }),
+            Question.countDocuments({ status: 'Approved', updatedAt: { $gte: startDate, $lte: endDate } }),
+            Question.countDocuments({ status: 'Rejected', updatedAt: { $gte: startDate, $lte: endDate } }),
+            Question.countDocuments({
+                status: 'Pending',
+                makerComments: { $exists: true, $ne: "" },
+                updatedAt: { $gte: startDate, $lte: endDate }
+            }),
             Question.countDocuments({ status: 'Pending' })
         ]);
 
-        // 2. Get Status Distribution using an aggregation pipeline
+        // --- 2. Status Distribution (No changes needed here) ---
         const statusDistribution = await Question.aggregate([
             { $group: { _id: '$status', count: { $sum: 1 } } },
             { $project: { status: '$_id', count: 1, _id: 0 } }
         ]);
 
-        // 3. Get Maker Performance (questions created and submitted)
-        const makerPerformance = await Question.aggregate([
-            { $match: { status: { $ne: 'Draft' } } }, // Only count questions that have been submitted
+        // --- 3. Maker Performance Table ---
+        const makerPerformance = await Maker.aggregate([
             {
-                $group: {
-                    _id: '$maker',
-                    // Use $cond to conditionally sum counts for each status
-                    approved: { $sum: { $cond: [{ $eq: ['$status', 'Approved'] }, 1, 0] } },
-                    rejected: { $sum: { $cond: [{ $eq: ['$status', 'Rejected'] }, 1, 0] } },
-                    pending: { $sum: { $cond: [{ $eq: ['$status', 'Pending'] }, 1, 0] } },
-                    totalSubmitted: { $sum: 1 } // Total count of non-draft questions
+                $lookup: { from: 'questions', localField: '_id', foreignField: 'maker', as: 'questions' }
+            },
+            {
+                $project: {
+                    name: 1,
+                    // UPDATED: Calculate rejections within the selected date range.
+                    // This filters the 'actionDates' for each rejected question log
+                    // to only count rejections that occurred within the timeframe.
+                    historicalRejections: {
+                        $reduce: {
+                            input: { $ifNull: ['$makerrejectedquestions', []] },
+                            initialValue: 0,
+                            in: {
+                                $add: [
+                                    '$$value',
+                                    {
+                                        $size: {
+                                            $filter: {
+                                                input: { $ifNull: ['$$this.actionDates', []] },
+                                                as: 'actionDate',
+                                                cond: {
+                                                    $and: [
+                                                        { $gte: ['$$actionDate', startDate] },
+                                                        { $lte: ['$$actionDate', endDate] }
+                                                    ]
+                                                }
+                                            }
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    questionsInTimeframe: {
+                        $filter: {
+                            input: { $ifNull: ['$questions', []] },
+                            as: 'question',
+                            cond: {
+                                $and: [
+                                    { $gte: ['$$question.createdAt', startDate] },
+                                    { $lte: ['$$question.createdAt', endDate] }
+                                ]
+                            }
+                        }
+                    }
                 }
             },
-            { $sort: { totalSubmitted: -1 } }, // Sort by the total number of submitted questions
-            { $limit: 10 },
-            { $lookup: { from: 'makers', localField: '_id', foreignField: '_id', as: 'makerDetails' } },
-            { $unwind: '$makerDetails' },
             {
-                // Project the new fields to be sent to the frontend
                 $project: {
-                    makerName: '$makerDetails.name',
-                    approved: 1,
-                    rejected: 1,
-                    pending: 1,
-                    totalSubmitted: 1,
-                    _id: 0
+                    name: 1,
+                    historicalRejections: 1,
+                    totalCreated: { $size: '$questionsInTimeframe' },
+                    approved: { $size: { $filter: { input: '$questionsInTimeframe', as: 'q', cond: { $eq: ['$$q.status', 'Approved'] } } } },
+                    pending: { $size: { $filter: { input: '$questionsInTimeframe', as: 'q', cond: { $eq: ['$$q.status', 'Pending'] } } } },
+                    drafted: { $size: { $filter: { input: '$questionsInTimeframe', as: 'q', cond: { $eq: ['$$q.status', 'Draft'] } } } },
                 }
-            }
+            },
+            { $sort: { totalCreated: -1 } },
+            { $limit: 10 }
         ]);
 
-        // 4. Get Checker Performance (questions reviewed)
-        const checkerPerformance = await Question.aggregate([
-            { $match: { status: { $in: ['Approved', 'Rejected'] } } }, // Only count reviewed questions
+        // --- 4. Checker Performance Table ---
+        const checkerPerformance = await Checker.aggregate([
             {
-                $group: {
-                    _id: '$checkedBy',
-                    approved: { $sum: { $cond: [{ $eq: ['$status', 'Approved'] }, 1, 0] } },
-                    rejected: { $sum: { $cond: [{ $eq: ['$status', 'Rejected'] }, 1, 0] } },
-                    totalReviewed: { $sum: 1 }
+                $lookup: { from: 'questions', localField: '_id', foreignField: 'checkedBy', as: 'reviewedQuestions' }
+            },
+            {
+                $project: {
+                    name: 1,
+                    // UPDATED: Calculate false rejections within the selected date range.
+                    // This filters the 'actionDates' for each false rejection log
+                    // to only count those that occurred within the timeframe.
+                    falseRejections: {
+                        $reduce: {
+                            input: { $ifNull: ['$checkerfalserejections', []] },
+                            initialValue: 0,
+                            in: {
+                                $add: [
+                                    '$$value',
+                                    {
+                                        $size: {
+                                            $filter: {
+                                                input: { $ifNull: ['$$this.actionDates', []] },
+                                                as: 'actionDate',
+                                                cond: {
+                                                    $and: [
+                                                        { $gte: ['$$actionDate', startDate] },
+                                                        { $lte: ['$$actionDate', endDate] }
+                                                    ]
+                                                }
+                                            }
+                                        }
+                                    }
+ ]
+                            }
+                        }
+                    },
+                    reviewedInTimeframe: {
+                        $filter: {
+                            input: { $ifNull: ['$reviewedQuestions', []] },
+                            as: 'question',
+                             cond: {
+                                $and: [
+                                    { $gte: ['$$question.updatedAt', startDate] },
+                                    { $lte: ['$$question.updatedAt', endDate] },
+                                    { $in: ['$$question.status', ['Approved', 'Rejected']] }
+                                ]
+                            }
+                        }
+                    }
+                }
+            },
+            {
+                $project: {
+                    name: 1,
+                    falseRejections: 1,
+                    totalReviewed: { $size: '$reviewedInTimeframe' },
+                    approved: { $size: { $filter: { input: '$reviewedInTimeframe', as: 'q', cond: { $eq: ['$$q.status', 'Approved'] } } } },
+                    rejected: { $size: { $filter: { input: '$reviewedInTimeframe', as: 'q', cond: { $eq: ['$$q.status', 'Rejected'] } } } },
                 }
             },
             { $sort: { totalReviewed: -1 } },
-            { $limit: 10 }, // Get top 10 checkers
-            { $lookup: { from: 'checkers', localField: '_id', foreignField: '_id', as: 'checkerDetails' } },
-            { $unwind: '$checkerDetails' },
-            { $project: { checkerName: '$checkerDetails.name', approved: 1, rejected: 1, totalReviewed: 1, _id: 0 } }
+            { $limit: 10 }
         ]);
 
-        // 5. Send all stats in a single response
+        // --- 5. Send all stats in a single, well-structured response ---
         res.json({
-            summary: {
-                totalQuestions,
-                totalApproved,
-                totalRejected,
-                totalPending
-            },
+            summary: { totalQuestions, totalApproved, totalRejected, totalResubmitted, totalPending },
             statusDistribution,
             makerPerformance,
             checkerPerformance
         });
 
     } catch (error) {
-        console.error("Error fetching dashboard stats:", error);
+        console.error("Error fetching admin dashboard stats:", error);
         res.status(500).json({ message: "Server error while fetching dashboard statistics." });
     }
 };

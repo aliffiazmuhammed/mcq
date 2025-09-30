@@ -1,5 +1,7 @@
 import express from "express";
-import { createOrUpdateQuestion, getQuestionById, getDraftQuestions, deleteQuestions, submitQuestionsForApproval, getSubmittedQuestions ,getAvailablePapers,claimPaper, getClaimedPapers ,getAllCourses ,getClaimedPapersByMaker,getQuestionPaperById} from "../controllers/questionController.js";
+import { createOrUpdateQuestion, getQuestionById, getDraftQuestions, deleteQuestions, 
+    submitQuestionsForApproval, getSubmittedQuestions ,getAvailablePapers,claimPaper, 
+    getClaimedPapers ,getAllCourses ,getClaimedPapersByMaker,getQuestionPaperById ,getMakerDashboardStats} from "../controllers/questionController.js";
 import { protect, authorize } from "../middlewares/authmiddleware.js";
 import { ROLES } from "../constants/roles.js";
 import upload from "../middlewares/uploadmiddleware.js";
@@ -29,6 +31,7 @@ router.put('/papers/:id/claim', protect, authorize('maker'), claimPaper);
 router.get('/papers/claimed', protect, authorize('maker'), getClaimedPapers);
 router.get("/all", protect, getAllCourses);
 router.get("/papers/makerclaimed", protect, getClaimedPapersByMaker);
+router.get("/dashboard", protect, getMakerDashboardStats)
 router.get("/question-papers/:id",protect,getQuestionPaperById)
 router.get("/:id", protect, getQuestionById);
 

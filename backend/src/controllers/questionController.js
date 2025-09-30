@@ -7,12 +7,39 @@ import mongoose from 'mongoose';
 import Maker from "../models/Maker.js";
 import Checker from "../models/Checker.js";
 
+const updateActionLog = async (Model, userId, logArrayName, questionId, session) => {
+    const user = await Model.findById(userId).session(session);
+    if (!user) {
+        // This case should be rare, but it's a good safeguard.
+        console.warn(`User not found for model ${Model.modelName} with ID ${userId}`);
+        return;
+    }
+
+    // Find the specific log entry for the given question within the user's document.
+    const logEntry = user[logArrayName].find(log => log.questionId.equals(questionId));
+
+    if (logEntry) {
+        // If the log already exists, simply push a new timestamp to its actionDates array.
+        logEntry.actionDates.push(new Date());
+    } else {
+        // If it's the first time this action is logged for this question, create a new entry.
+        user[logArrayName].push({
+            questionId: questionId,
+            actionDates: [new Date()]
+        });
+    }
+
+    // Save the entire updated user document. Mongoose will validate the change.
+    await user.save({ session });
+};
+
+
 const createOrUpdateQuestion = async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
 
     try {
-        const {
+        let {
             _id, course, unit, subject, chapter, questionText,
             questionPaper, questionNumber, correctAnswer, explanation,
             complexity, keywords, status, makerComments, makerCommentIndex,
@@ -20,6 +47,10 @@ const createOrUpdateQuestion = async (req, res) => {
             existingReferenceImage1, existingReferenceImage2,
             existingChoiceImages, questionPaperYear, choicesText, hasImage
         } = req.body;
+        if (Array.isArray(_id)) {
+            console.warn(_id);
+            _id = _id[0];
+        }
 
         // --- Find Course ID ---
         let courseId;
@@ -87,17 +118,24 @@ const createOrUpdateQuestion = async (req, res) => {
 
             const originalCheckerId = originalQuestion.checkedBy;
 
-            // Condition: Resubmitting a rejected question with "No corrections required"
+            // Condition: A previously rejected question is resubmitted with "No corrections required"
             if (originalQuestion.status === 'Rejected' && Number(makerCommentIndex) === 1) {
-                // Remove the question from the maker's rejected list
+                // Decrement the rejection log by removing the last timestamp from the array.
                 await Maker.updateOne(
                     { _id: makerId, "makerrejectedquestions.questionId": _id },
-                    { $inc: { "makerrejectedquestions.$.count": -1 } },
+                    { $pop: { "makerrejectedquestions.$.actionDates": 1 } }, // 1 pops the last element
+                    { session }
+                );
+
+                // Clean up the entry if the dates array becomes empty.
+                await Maker.updateOne(
+                    { _id: makerId },
+                    { $pull: { makerrejectedquestions: { actionDates: { $size: 0 } } } },
                     { session }
                 );
             }
 
-            // Condition: Submitting a draft for the first time
+            // Condition: A draft is being submitted for the first time
             if (originalQuestion.status === 'Draft' && status === 'Pending') {
                 await Maker.findByIdAndUpdate(
                     makerId,
@@ -113,13 +151,8 @@ const createOrUpdateQuestion = async (req, res) => {
             question = new Question(questionData);
             await question.save({ session });
 
-            // If saved as a draft, add it to the maker's drafted list
             if (question.status === 'Draft') {
-                await Maker.findByIdAndUpdate(
-                    makerId,
-                    { $push: { makerdraftedquestions: { questionId: question._id } } },
-                    { session }
-                );
+                await updateActionLog(Maker, makerId, 'makerdraftedquestions', question._id, session);
             }
         }
 
@@ -444,4 +477,149 @@ const getQuestionPaperById = async (req, res) => {
     }
 };
 
-export { createOrUpdateQuestion, getQuestionById, getDraftQuestions, deleteQuestions, submitQuestionsForApproval, getSubmittedQuestions , getAvailablePapers,claimPaper,getClaimedPapers,getAllCourses,getClaimedPapersByMaker,getQuestionPaperById};
+const getDateRange = (timeframe, start, end) => {
+    const now = new Date();
+    let startDate = new Date(0); // Default to the beginning of time for 'all'
+    let endDate = now;
+
+    if (timeframe === 'weekly') {
+        startDate = new Date();
+        startDate.setDate(now.getDate() - 7);
+    } else if (timeframe === 'monthly') {
+        startDate = new Date();
+        startDate.setMonth(now.getMonth() - 1);
+    } else if (timeframe === 'custom' && start && end) {
+        startDate = new Date(start);
+        endDate = new Date(end);
+        // Ensure the end date covers the entire day
+        endDate.setHours(23, 59, 59, 999);
+    }
+    return { startDate, endDate };
+};
+const getMakerDashboardStats = async (req, res) => {
+    try {
+        const makerId = req.user._id;
+        const { timeframe = 'all', startDate: start, endDate: end } = req.query;
+
+        // Use the same robust date range helper as the admin dashboard
+        const { startDate, endDate } = getDateRange(timeframe, start, end);
+
+        // 2. Fetch all necessary data concurrently for efficiency
+        const [
+            maker,
+            allCreatedQuestions,
+            totalPending,
+            currentlyRejected,
+            totalResubmitted
+        ] = await Promise.all([
+            // We fetch the maker document which contains the historical logs
+            Maker.findById(makerId).lean(),
+            Question.find({ maker: makerId, createdAt: { $gte: startDate, $lte: endDate } }).lean(),
+            // These are current snapshot counts, not time-based
+            Question.countDocuments({ maker: makerId, status: 'Pending' }),
+            Question.countDocuments({ maker: makerId, status: 'Rejected' }),
+            // Resubmitted actions are time-based
+            Question.countDocuments({
+                maker: makerId,
+                status: 'Pending',
+                makerComments: { $exists: true, $ne: "" },
+                updatedAt: { $gte: startDate, $lte: endDate }
+            })
+        ]);
+
+        if (!maker) {
+            return res.status(404).json({ message: "Maker not found." });
+        }
+
+        // 3. Calculate statistics based on the new schema with actionDates
+
+        // Calculate total accepted within the timeframe
+        let totalAcceptedInTimeframe = 0;
+        (maker.makeracceptedquestions || []).forEach(log => {
+            const count = (log.actionDates || []).filter(date => new Date(date) >= startDate && new Date(date) <= endDate).length;
+            totalAcceptedInTimeframe += count;
+        });
+
+        // Calculate total rejections within the timeframe
+        let totalRejectedInTimeframe = 0;
+        (maker.makerrejectedquestions || []).forEach(log => {
+            const count = (log.actionDates || []).filter(date => new Date(date) >= startDate && new Date(date) <= endDate).length;
+            totalRejectedInTimeframe += count;
+        });
+
+        // NEW: Re-add the calculation for all-time historical rejections. This is not filtered by date.
+        const historicalRejections = (maker.makerrejectedquestions || []).reduce((sum, log) => {
+            return sum + (log.actionDates || []).length;
+        }, 0);
+
+
+        // Drafts are a current snapshot, not time-based.
+        const totalDrafted = (maker.makerdraftedquestions || []).length;
+
+        const totalCreated = allCreatedQuestions.length;
+
+        // 4. Prepare data for the chart using the new actionDates
+        const chartData = {};
+
+        const processForChart = (date, type) => {
+            const dateString = new Date(date).toISOString().split('T')[0];
+            if (!chartData[dateString]) {
+                chartData[dateString] = { date: dateString, created: 0, approved: 0, rejected: 0 };
+            }
+            chartData[dateString][type]++;
+        };
+
+        // Process created questions based on their creation date
+        allCreatedQuestions.forEach(q => processForChart(q.createdAt, 'created'));
+
+        // Process approved actions based on their individual action dates
+        (maker.makeracceptedquestions || []).forEach(log => {
+            (log.actionDates || []).forEach(date => {
+                if (new Date(date) >= startDate && new Date(date) <= endDate) {
+                    processForChart(date, 'approved');
+                }
+            });
+        });
+
+        // Process rejected actions based on their individual action dates
+        (maker.makerrejectedquestions || []).forEach(log => {
+            (log.actionDates || []).forEach(date => {
+                if (new Date(date) >= startDate && new Date(date) <= endDate) {
+                    processForChart(date, 'rejected');
+                }
+            });
+        });
+
+        // Convert chart data from an object to a sorted array
+        const sortedChartData = Object.values(chartData).sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        // 5. Send the complete statistics object
+        res.json({
+            stats: {
+                totalCreated,
+                totalAccepted: totalAcceptedInTimeframe,
+                totalRejected: totalRejectedInTimeframe,
+                historicalRejections: historicalRejections, // ADDED: Include the historical count in the response
+                currentlyRejected,
+                totalDrafted,
+                totalResubmitted,
+                totalPending,
+            },
+            chartData: sortedChartData,
+        });
+
+    } catch (err) {
+        console.error("Error in getMakerDashboardStats:", err);
+        res.status(500).json({ message: "Server error", error: err.message });
+    }
+};
+
+
+export { createOrUpdateQuestion, 
+    getQuestionById, 
+    getDraftQuestions, deleteQuestions, 
+    submitQuestionsForApproval, getSubmittedQuestions , 
+    getAvailablePapers,claimPaper,
+    getClaimedPapers,getAllCourses,
+    getClaimedPapersByMaker,getQuestionPaperById,getMakerDashboardStats};
+

@@ -1,17 +1,17 @@
 import mongoose from "mongoose";
 
-// A sub-schema to track a question and a count associated with it.
-const QuestionHistorySchema = new mongoose.Schema({
+// NEW: A more robust sub-schema to log every action instance with a timestamp.
+const QuestionLogSchema = new mongoose.Schema({
     questionId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Question',
         required: true
     },
-    count: {
-        type: Number,
-        default: 1
-    }
-}, { _id: false }); // No separate _id for sub-documents in this array
+    actionDates: [{
+        type: Date,
+        default: Date.now
+    }]
+}, { _id: false });
 
 const checkerSchema = new mongoose.Schema(
     {
@@ -35,11 +35,11 @@ const checkerSchema = new mongoose.Schema(
             select: false,
         },
 
-        // --- UPDATED FIELDS: Now an array of objects with questionId and count ---
+        // --- UPDATED FIELDS: Now logs each action with a timestamp ---
 
-        checkeracceptedquestion: [QuestionHistorySchema],
-        checkerrejectedquestion: [QuestionHistorySchema],
-        checkerfalserejections: [QuestionHistorySchema],
+        checkeracceptedquestion: [QuestionLogSchema],
+        checkerrejectedquestion: [QuestionLogSchema],
+        checkerfalserejections: [QuestionLogSchema],
 
         // --- END OF UPDATED FIELDS ---
     },

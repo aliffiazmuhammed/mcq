@@ -30,6 +30,8 @@ import ShowQuestionPaper from "./pages/checker/ShowQuestionPaper";
 import CreateCoursePage from "./pages/admin/CreateCoursePage";
 import ViewCoursesPage from "./pages/admin/ViewCoursesPage";
 import EditRejectedQuestion from "./pages/maker/EditRejectedQuestion";
+import MakerDashboard from "./pages/maker/MakerDashboard";
+import CheckerDashboard from "./pages/checker/CheckerDashboard";
 
 function PrivateRoute({ children, role }) {
   const { user, loading } = useAuth();
@@ -101,6 +103,7 @@ export default function App() {
             <Route path="submitted" element={<SubmittedQuestions />} />
             <Route path="availabe-pdfs" element={<AvailablePdfsPage />} />
             <Route path="claimed-pdfs" element={<ClaimedPdfsPage />} />
+            <Route path="dashboard" element={<MakerDashboard />} />
           </Route>
 
           <Route
@@ -115,6 +118,7 @@ export default function App() {
             <Route path="accepted" element={<AcceptedQuestions />} />
             <Route path="details/:id" element={<QuestionDetailPage />} />
             <Route path="claimed-pdfs" element={<ShowQuestionPaper />} />
+            <Route path="dashboard" element={<CheckerDashboard />} />
           </Route>
 
           {/* Fallback */}

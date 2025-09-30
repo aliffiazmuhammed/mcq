@@ -15,6 +15,7 @@ export default function MakerNavbar() {
     { name: "Submitted Questions", path: "/maker/submitted", icon: "📤" },
     { name: "Availabe Pdfs", path: "/maker/availabe-pdfs", icon: "📚" },
     { name: "Claimed Pdfs", path: "/maker/claimed-pdfs", icon: "🧾" },
+    { name: "Dashboard", path: "/maker/dashboard", icon: "📊" },
   ];
 
   return (

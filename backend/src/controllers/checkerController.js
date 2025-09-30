@@ -29,86 +29,55 @@ const getPendingQuestions = async (req, res) => {
     }
 };
 
+const updateActionLog = async (Model, userId, logArrayName, questionId, session) => {
+    const result = await Model.updateOne(
+        { _id: userId, [`${logArrayName}.questionId`]: questionId },
+        { $push: { [`${logArrayName}.$.actionDates`]: new Date() } },
+        { session }
+    );
+
+    if (result.modifiedCount === 0) {
+        await Model.findByIdAndUpdate(
+            userId,
+            { $push: { [logArrayName]: { questionId: questionId, actionDates: [new Date()] } } },
+            { session }
+        );
+    }
+};
+
+
 // Approve a question
 const approveQuestion = async (req, res) => {
     const { id } = req.params;
-    const currentCheckerId = req.user._id; // The checker performing the approval
+    const currentCheckerId = req.user._id;
 
     const session = await mongoose.startSession();
     session.startTransaction();
 
     try {
-        // 1. Find the question *before* updating to check its prior state
         const questionToApprove = await Question.findById(id).session(session);
-
-        if (!questionToApprove) {
-            throw new Error("Question not found.");
-        }
+        if (!questionToApprove) throw new Error("Question not found.");
 
         const originalCheckerId = questionToApprove.checkedBy;
         const makerId = questionToApprove.maker;
         const questionId = questionToApprove._id;
 
-        // 2. Check for the "false rejection" condition
-        if (questionToApprove.makerComments === "No corrections required") {
-            if (originalCheckerId) {
-                // First, try to find and increment the count for this question
-                const result = await Checker.updateOne(
-                    { _id: originalCheckerId, "checkerfalserejections.questionId": questionId },
-                    { $inc: { "checkerfalserejections.$.count": 1 } },
-                    { session }
-                );
-                // If no document was updated, it means the question isn't in the array yet, so add it.
-                if (result.modifiedCount === 0) {
-                    await Checker.findByIdAndUpdate(
-                        originalCheckerId,
-                        { $push: { checkerfalserejections: { questionId: questionId, count: 1 } } },
-                        { session }
-                    );
-                }
-            }
+        // Handle "False Rejection" Logging
+        if (questionToApprove.makerComments === "No corrections required" && originalCheckerId) {
+            await updateActionLog(Checker, originalCheckerId, 'checkerfalserejections', questionId, session);
         }
 
-        // 3. Update the question document itself
-        const updatedQuestion = await Question.findByIdAndUpdate(
-            id,
-            {
-                status: "Approved",
-                checkedBy: currentCheckerId,
-                checkerComments: "",
-            },
-            { new: true, session }
-        );
+        // Update the Question's status
+        const updatedQuestion = await Question.findByIdAndUpdate(id, {
+            status: "Approved",
+            checkedBy: currentCheckerId,
+            checkerComments: "",
+        }, { new: true, session });
 
-        // 4. Update the current checker's accepted list
-        const checkerResult = await Checker.updateOne(
-            { _id: currentCheckerId, "checkeracceptedquestion.questionId": questionId },
-            { $inc: { "checkeracceptedquestion.$.count": 1 } },
-            { session }
-        );
-        if (checkerResult.modifiedCount === 0) {
-            await Checker.findByIdAndUpdate(
-                currentCheckerId,
-                { $push: { checkeracceptedquestion: { questionId: questionId } } }, // default count is 1
-                { session }
-            );
-        }
+        // Log this approval for the current checker and the maker
+        await updateActionLog(Checker, currentCheckerId, 'checkeracceptedquestion', questionId, session);
+        await updateActionLog(Maker, makerId, 'makeracceptedquestions', questionId, session);
 
-        // 5. Update the maker's accepted list
-        const makerResult = await Maker.updateOne(
-            { _id: makerId, "makeracceptedquestions.questionId": questionId },
-            { $inc: { "makeracceptedquestions.$.count": 1 } },
-            { session }
-        );
-        if (makerResult.modifiedCount === 0) {
-            await Maker.findByIdAndUpdate(
-                makerId,
-                { $push: { makeracceptedquestions: { questionId: questionId } } }, // default count is 1
-                { session }
-            );
-        }
-
-        // 7. If all operations succeed, commit the transaction
         await session.commitTransaction();
         res.json(updatedQuestion);
 
@@ -134,21 +103,15 @@ const rejectQuestion = async (req, res) => {
     session.startTransaction();
 
     try {
-        // 1. Validate input
         if (!comments || comments.trim() === "") {
             throw new Error("Comments are required for rejection.");
         }
 
-        // 2. Update the question document
-        const question = await Question.findByIdAndUpdate(
-            id,
-            {
-                status: "Rejected",
-                checkerComments: comments,
-                checkedBy: checkerId
-            },
-            { new: true, session }
-        );
+        const question = await Question.findByIdAndUpdate(id, {
+            status: "Rejected",
+            checkerComments: comments,
+            checkedBy: checkerId
+        }, { new: true, session });
 
         if (!question) {
             throw new Error("Question not found.");
@@ -157,43 +120,16 @@ const rejectQuestion = async (req, res) => {
         const questionId = question._id;
         const makerId = question.maker;
 
-        // 3. Update the checker's rejected list
-        // First, try to find and increment the count for this question
-        const checkerResult = await Checker.updateOne(
-            { _id: checkerId, "checkerrejectedquestion.questionId": questionId },
-            { $inc: { "checkerrejectedquestion.$.count": 1 } },
-            { session }
-        );
-        // If no document was updated, it means the question isn't in the array yet, so add it.
-        if (checkerResult.modifiedCount === 0) {
-            await Checker.findByIdAndUpdate(
-                checkerId,
-                { $push: { checkerrejectedquestion: { questionId: questionId } } }, // default count is 1
-                { session }
-            );
-        }
+        // Log this rejection for the current checker
+        await updateActionLog(Checker, checkerId, 'checkerrejectedquestion', questionId, session);
 
-        // 4. Update the maker's rejected list
-        const makerResult = await Maker.updateOne(
-            { _id: makerId, "makerrejectedquestions.questionId": questionId },
-            { $inc: { "makerrejectedquestions.$.count": 1 } },
-            { session }
-        );
-        if (makerResult.modifiedCount === 0) {
-            await Maker.findByIdAndUpdate(
-                makerId,
-                { $push: { makerrejectedquestions: { questionId: questionId } } }, // default count is 1
-                { session }
-            );
-        }
+        // Log this rejection for the question's maker
+        await updateActionLog(Maker, makerId, 'makerrejectedquestions', questionId, session);
 
-        // 5. If all operations succeed, commit the transaction
         await session.commitTransaction();
-
         res.json(question);
 
     } catch (err) {
-        // 6. If any error occurs, abort the transaction
         await session.abortTransaction();
         console.error("Error in rejectQuestion transaction:", err);
 
@@ -205,7 +141,6 @@ const rejectQuestion = async (req, res) => {
         }
         res.status(500).json({ message: "Server error during rejection. The operation was rolled back." });
     } finally {
-        // 7. Always end the session
         session.endSession();
     }
 };
@@ -258,95 +193,43 @@ const bulkApproveQuestions = async (req, res) => {
 
         const approvedQuestionIds = questionsToApprove.map(q => q._id);
 
-        // 3. Aggregate data for various updates
-        const makerQuestionIds = {};           // Groups questions by maker for acceptance update
-        const falseRejectionsByChecker = {}; // Groups questions by original checker for false rejection update
-        const cleanupData = {};              // Groups questions by original checker/maker for rejection list cleanup
-
-        for (const q of questionsToApprove) {
-            const makerId = q.maker.toString();
-            const questionId = q._id;
-            const originalCheckerId = q.checkedBy ? q.checkedBy.toString() : null;
-
-            // Group for maker acceptance
-            if (!makerQuestionIds[makerId]) makerQuestionIds[makerId] = [];
-            makerQuestionIds[makerId].push(questionId);
-
-            // Group for false rejection logging if the condition is met
-            if (q.makerComments === "No corrections required" && originalCheckerId) {
-                if (!falseRejectionsByChecker[originalCheckerId]) falseRejectionsByChecker[originalCheckerId] = [];
-                falseRejectionsByChecker[originalCheckerId].push(questionId);
-            }
-
-            // Group for cleanup if the question was previously rejected (indicated by makerComments)
-            if (q.makerComments && originalCheckerId) {
-                if (!cleanupData[originalCheckerId]) cleanupData[originalCheckerId] = { checker: [], maker: {} };
-                if (!cleanupData[originalCheckerId].maker[makerId]) cleanupData[originalCheckerId].maker[makerId] = [];
-                cleanupData[originalCheckerId].checker.push(questionId);
-                cleanupData[originalCheckerId].maker[makerId].push(questionId);
-            }
-        }
-
-        // 4. Update the status of all questions
+        // 3. Update the status of all questions at once
         const result = await Question.updateMany(
             { _id: { $in: approvedQuestionIds } },
             { $set: { status: "Approved", checkedBy: currentCheckerId, checkerComments: "" } },
             { session }
         );
 
-        // Create an array to hold all concurrent database update promises
+        // 4. Prepare for concurrent log updates
         const updatePromises = [];
 
-        // 5. Update the current checker's accepted list
-        for (const questionId of approvedQuestionIds) {
-            const promise = Checker.updateOne(
-                { _id: currentCheckerId, "checkeracceptedquestion.questionId": questionId },
-                { $inc: { "checkeracceptedquestion.$.count": 1 } },
-                { session }
-            ).then(res => {
-                if (res.modifiedCount === 0) {
-                    return Checker.findByIdAndUpdate(currentCheckerId, { $push: { checkeracceptedquestion: { questionId } } }, { session });
-                }
-            });
-            updatePromises.push(promise);
-        }
+        for (const question of questionsToApprove) {
+            const makerId = question.maker;
+            const questionId = question._id;
+            const originalCheckerId = question.checkedBy;
 
-        // 6. Update each maker's accepted list
-        for (const makerId in makerQuestionIds) {
-            for (const questionId of makerQuestionIds[makerId]) {
-                const promise = Maker.updateOne(
-                    { _id: makerId, "makeracceptedquestions.questionId": questionId },
-                    { $inc: { "makeracceptedquestions.$.count": 1 } },
-                    { session }
-                ).then(res => {
-                    if (res.modifiedCount === 0) {
-                        return Maker.findByIdAndUpdate(makerId, { $push: { makeracceptedquestions: { questionId } } }, { session });
-                    }
-                });
-                updatePromises.push(promise);
+            // Log the approval for the current checker
+            updatePromises.push(
+                updateActionLog(Checker, currentCheckerId, 'checkeracceptedquestion', questionId, session)
+            );
+
+            // Log the approval for the question's maker
+            updatePromises.push(
+                updateActionLog(Maker, makerId, 'makeracceptedquestions', questionId, session)
+            );
+
+            // If it was a "false rejection", log that for the original checker
+            if (question.makerComments === "No corrections required" && originalCheckerId) {
+                updatePromises.push(
+                    updateActionLog(Checker, originalCheckerId, 'checkerfalserejections', questionId, session)
+                );
             }
         }
 
-        // 7. Update false rejection lists
-        for (const checkerId in falseRejectionsByChecker) {
-            for (const questionId of falseRejectionsByChecker[checkerId]) {
-                const promise = Checker.updateOne(
-                    { _id: checkerId, "checkerfalserejections.questionId": questionId },
-                    { $inc: { "checkerfalserejections.$.count": 1 } },
-                    { session }
-                ).then(res => {
-                    if (res.modifiedCount === 0) {
-                        return Checker.findByIdAndUpdate(checkerId, { $push: { checkerfalserejections: { questionId } } }, { session });
-                    }
-                });
-                updatePromises.push(promise);
-            }
-        }
-
-        // Execute all updates concurrently
+        // 5. Execute all historical log updates concurrently
         await Promise.all(updatePromises);
 
-        // 9. If everything succeeds, commit the transaction
+        // 6. If everything succeeds, commit the transaction
         await session.commitTransaction();
 
         res.json({ message: `${result.modifiedCount} question(s) have been successfully approved.` });
@@ -362,7 +245,6 @@ const bulkApproveQuestions = async (req, res) => {
         session.endSession();
     }
 };
-
 
 const getQuestionById = async (req, res) => {
     try {
@@ -418,6 +300,79 @@ console.log(claimedPapers)
     }
 };
 
+const getCheckerDashboardStats = async (req, res) => {
+    try {
+        const { timeframe = 'all' } = req.query; // 'weekly', 'monthly', 'all'
+
+        // 1. Define the date range based on the timeframe filter
+        let startDate = new Date(0); // A very old date for 'all' time
+        if (timeframe === 'weekly') {
+            startDate = new Date();
+            startDate.setDate(startDate.getDate() - 7);
+        } else if (timeframe === 'monthly') {
+            startDate = new Date();
+            startDate.setMonth(startDate.getMonth() - 1);
+        }
+
+        // 2. Fetch all statistics concurrently for maximum efficiency
+        const [
+            totalQuestions,
+            totalApproved,
+            totalRejected,
+            totalPending,
+            questionsForChart
+        ] = await Promise.all([
+            Question.countDocuments(), // Total questions of all time
+            Question.countDocuments({ status: 'Approved', updatedAt: { $gte: startDate } }),
+            Question.countDocuments({ status: 'Rejected', updatedAt: { $gte: startDate } }),
+            Question.countDocuments({ status: 'Pending' }), // Pending is a current state, not time-based
+            // Fetch questions to build the chart, considering the action date (updatedAt)
+            Question.find({
+                status: { $in: ['Approved', 'Rejected', 'Pending'] },
+                updatedAt: { $gte: startDate }
+            }).lean()
+        ]);
+
+        // 3. Prepare data for the chart, grouping counts by date
+        const chartData = {};
+        const processForChart = (question) => {
+            // Use updatedAt for actions, createdAt for newly pending questions
+            const actionDate = (question.status === 'Pending') ? question.createdAt : question.updatedAt;
+            const date = new Date(actionDate).toISOString().split('T')[0];
+
+            if (!chartData[date]) {
+                chartData[date] = { date, approved: 0, rejected: 0, pending: 0 };
+            }
+            if (question.status === 'Approved') chartData[date].approved++;
+            if (question.status === 'Rejected') chartData[date].rejected++;
+            // Only count pending questions created within the timeframe for the chart
+            if (question.status === 'Pending' && new Date(question.createdAt) >= startDate) {
+                chartData[date].pending++;
+            }
+        };
+
+        questionsForChart.forEach(processForChart);
+
+        // Convert chart data from an object to a sorted array for the frontend
+        const sortedChartData = Object.values(chartData).sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        // 4. Send the complete statistics and chart data object
+        res.json({
+            stats: {
+                totalQuestions,
+                totalApproved,
+                totalRejected,
+                totalPending,
+            },
+            chartData: sortedChartData,
+        });
+
+    } catch (err) {
+        console.error("Error in getCheckerDashboardStats:", err);
+        res.status(500).json({ message: "Server error", error: err.message });
+    }
+};
+
 export {
     getPendingQuestions,
     approveQuestion,
@@ -425,5 +380,6 @@ export {
     getReviewedQuestions,
     bulkApproveQuestions,
     getQuestionById,
-    getPapers
+    getPapers,
+    getCheckerDashboardStats
 };

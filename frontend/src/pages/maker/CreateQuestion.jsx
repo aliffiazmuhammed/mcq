@@ -364,7 +364,7 @@ const ReferenceImagesSection = ({
   onFileChange,
   onRemoveImage,
 }) => (
-  <SectionWrapper title="Reference Images">
+  <SectionWrapper title="Question Reference Images">
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
       <ImageUploader
         label="Reference Image 1"
@@ -775,7 +775,7 @@ export default function CreateQuestion() {
           } successfully!`
         );
 
-        navigate("/maker/drafts");
+        navigate("/maker/create");
       } catch (err) {
         console.error("Error submitting question:", err);
       } finally {
